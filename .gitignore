@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+database/data/*
+!database/data/.gitkeep
+bucket/data/*
+!bucket/data/.gitkeep
+!bucket/data/images/
+!bucket/data/images/.gitkeep
+!bucket/data/exports/
+!bucket/data/exports/.gitkeep

@@ -1,0 +1,63 @@
+services:
+  database:
+    build:
+      context: ./database
+    container_name: bioacervo-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    container_name: bioacervo-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      database:
+        condition: service_healthy
+      bucket:
+        condition: service_healthy
+    volumes:
+      - ./bucket/data:/bucket
+    ports:
+      - "${BACKEND_PORT}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  bucket:
+    build:
+      context: ./bucket
+    container_name: bioacervo-bucket
+    restart: unless-stopped
+    volumes:
+      - ./bucket/data:/data
+    healthcheck:
+      test: ["CMD", "test", "-d", "/data/images", "-a", "-d", "/data/exports"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: bioacervo-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT}:80"
