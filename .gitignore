@@ -3,8 +3,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-database/data/*
+
+# PostgreSQL
+database/data/
 !database/data/.gitkeep
+
+# Bucket
 bucket/data/*
 !bucket/data/.gitkeep
 !bucket/data/images/

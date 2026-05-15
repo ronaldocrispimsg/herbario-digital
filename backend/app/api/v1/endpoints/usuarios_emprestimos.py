@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.models import Usuario, Emprestimo
 from app.schemas.schemas import (
-    UsuarioOut, UsuarioUpdate,
+    UsuarioCreate, UsuarioOut, UsuarioUpdate,
     EmprestimoCreate, EmprestimoUpdate, EmprestimoOut,
     PaginatedResponse,
 )
@@ -34,6 +34,18 @@ async def listar_usuarios(
         pages=math.ceil(total / per_page) if total else 0,
         items=[UsuarioOut.model_validate(i) for i in items],
     )
+
+
+@usuario_router.post("", response_model=UsuarioOut, status_code=201)
+async def criar_usuario(
+    data: UsuarioCreate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_roles("administrador")),
+):
+    existente = await UsuarioService.get_by_email(db, data.email)
+    if existente:
+        raise HTTPException(400, "Email já cadastrado")
+    return await UsuarioService.create(db, data)
 
 
 @usuario_router.get("/{uid}", response_model=UsuarioOut)
