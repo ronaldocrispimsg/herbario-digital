@@ -66,7 +66,7 @@
     <div id="screen-especimes" class="screen">
       <div class="page-header">
         <div><h2>Espécimes</h2><p>Catálogo do acervo biológico</p></div>
-        <button class="btn btn-sm" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
+        <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
       </div>
       <div class="search-bar">
         <div class="search-input-wrap">
@@ -116,7 +116,7 @@
     <div id="screen-taxonomias" class="screen">
       <div class="page-header">
         <div><h2>Taxonomias</h2><p>Classificação taxonômica das espécies</p></div>
-        <button class="btn btn-sm" onclick="openModalTaxonomia()">+ Nova Taxonomia</button>
+        <button class="btn btn-sm write-action" onclick="openModalTaxonomia()">+ Nova Taxonomia</button>
       </div>
       <div class="search-bar">
         <div class="search-input-wrap">
@@ -141,7 +141,7 @@
     <div id="screen-localidades" class="screen">
       <div class="page-header">
         <div><h2>Localidades</h2><p>Dados geográficos de coleta</p></div>
-        <button class="btn btn-sm" onclick="openModalLocalidade()">+ Nova Localidade</button>
+        <button class="btn btn-sm write-action" onclick="openModalLocalidade()">+ Nova Localidade</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -160,7 +160,7 @@
     <div id="screen-emprestimos" class="screen">
       <div class="page-header">
         <div><h2>Empréstimos</h2><p>Gestão de espécimes emprestados</p></div>
-        <button class="btn btn-sm" onclick="openModalEmprestimo()">+ Registrar Empréstimo</button>
+        <button class="btn btn-sm write-action" onclick="openModalEmprestimo()">+ Registrar Empréstimo</button>
       </div>
       <div class="tabs">
         <button class="tab-btn active" data-tab="ativos" onclick="switchLoanTab('ativos')">Ativos</button>
@@ -173,7 +173,7 @@
     <div id="screen-usuarios" class="screen">
       <div class="page-header">
         <div><h2>Usuários</h2><p>Gestão de acesso ao sistema</p></div>
-        <button class="btn btn-sm" onclick="openModalUsuario()">+ Novo Usuário</button>
+        <button class="btn btn-sm admin-action" onclick="openModalUsuario()">+ Novo Usuário</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -243,6 +243,20 @@
           <select id="e-confianca"><option value="">—</option><option value="alta">Alta</option><option value="média">Média</option><option value="baixa">Baixa</option></select>
         </div>
         <div class="field"><label>Voucher GenBank</label><input id="e-genbank" placeholder="ACC-XXXXX" /></div>
+        <div class="section-title">Imagens</div>
+        <div class="field col-full">
+          <label>Enviar imagem</label>
+          <input type="file" id="e-imagem" accept="image/jpeg,image/png,image/tiff,image/webp" />
+        </div>
+        <div class="field">
+          <label>Descrição da imagem</label>
+          <input id="e-imagem-desc" placeholder="Ex: vista geral, detalhe floral" />
+        </div>
+        <label class="check-field">
+          <input type="checkbox" id="e-imagem-principal" />
+          <span>Imagem principal</span>
+        </label>
+        <div class="upload-hint col-full" id="e-imagem-hint"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -263,6 +277,17 @@
     <div class="modal-footer">
       <button class="btn btn-sm btn-ghost" onclick="closeModal('modal-detalhe-overlay')">Fechar</button>
     </div>
+  </div>
+</div>
+
+<!-- Visualização de Imagem -->
+<div class="overlay" id="modal-image-overlay" onclick="closeOverlay(event,'modal-image-overlay')">
+  <div class="modal image-viewer-modal">
+    <div class="modal-header">
+      <h3>Imagem do Espécime</h3>
+      <button class="modal-close" onclick="closeModal('modal-image-overlay')">✕</button>
+    </div>
+    <div class="modal-body image-viewer-body" id="image-viewer-body"></div>
   </div>
 </div>
 

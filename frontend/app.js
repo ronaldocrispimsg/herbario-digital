@@ -19,6 +19,7 @@ let state = {
   allTaxonomias: [],
   allLocalidades: [],
   allEspecimes: [],
+  currentDetailEspecime: null,
 };
 
 // ─────────────────────────────────────────────
@@ -36,6 +37,37 @@ async function api(method, path, body, isForm = false) {
   const data = ct.includes('json') ? await res.json() : await res.text();
   if (!res.ok) throw new Error(data?.detail || JSON.stringify(data) || res.statusText);
   return data;
+}
+
+function imageUrl(path) {
+  return path || '';
+}
+
+function resetImagemFields() {
+  const file = document.getElementById('e-imagem');
+  const desc = document.getElementById('e-imagem-desc');
+  const principal = document.getElementById('e-imagem-principal');
+  const hint = document.getElementById('e-imagem-hint');
+  if (file) file.value = '';
+  if (desc) desc.value = '';
+  if (principal) principal.checked = false;
+  if (hint) hint.textContent = '';
+}
+
+function canWrite() {
+  return state.user?.perfil === 'administrador' || state.user?.perfil === 'curador';
+}
+
+function canAdmin() {
+  return state.user?.perfil === 'administrador';
+}
+
+function escapeAttr(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // ─────────────────────────────────────────────
@@ -98,6 +130,12 @@ function postLogin() {
   if (loanBtn) {
     loanBtn.style.display = state.user?.perfil === 'leitor' ? 'none' : '';
   }
+  document.querySelectorAll('.write-action').forEach(el => {
+    el.style.display = canWrite() ? '' : 'none';
+  });
+  document.querySelectorAll('.admin-action').forEach(el => {
+    el.style.display = canAdmin() ? '' : 'none';
+  });
   navigateTo('dashboard');
 }
 
@@ -209,18 +247,20 @@ function clearFilters() {
 async function loadSelectsForEspecime() {
   try {
     if (!state.allTaxonomias.length) {
-      const r = await api('GET', '/taxonomias?per_page=200');
+      const r = await api('GET', '/taxonomias?per_page=100');
       state.allTaxonomias = r?.items || [];
     }
     if (!state.allLocalidades.length) {
-      const r = await api('GET', '/localidades?per_page=200');
+      const r = await api('GET', '/localidades?per_page=100');
       state.allLocalidades = r?.items || [];
     }
     fillSelect('e-taxonomia', state.allTaxonomias, t => t.nome_cientifico, t => t.id);
     fillSelect('e-localidade', state.allLocalidades,
       l => [l.municipio, l.estado].filter(Boolean).join(' — ') || l.localidade || `ID ${l.id}`,
       l => l.id, '— Sem localidade —');
-  } catch(e) {}
+  } catch(e) {
+    toast(`Erro ao carregar listas: ${e.message}`, 'error');
+  }
 }
 
 function fillSelect(id, items, labelFn, valueFn, emptyLabel) {
@@ -266,6 +306,9 @@ function renderEspecimes(data) {
   }
   tbody.innerHTML = data.items.map(e => {
     const loc = e.localidade ? [e.localidade.municipio, e.localidade.estado].filter(Boolean).join(', ') : '—';
+    const editButton = canWrite()
+      ? `<button class="btn btn-sm" onclick="editEspecime(${JSON.stringify(e).replace(/"/g,'&quot;')})">Editar</button>`
+      : '';
     return `<tr>
       <td data-label="Código" class="td-mono">${e.codigo_catalogo}</td>
       <td data-label="Nome Científico" class="td-sci">${e.taxonomia?.nome_cientifico || '—'}</td>
@@ -274,7 +317,7 @@ function renderEspecimes(data) {
       <td data-label="Status"><span class="tag tag-${e.status}">${e.status}</span></td>
       <td data-label="Ações" class="td-actions">
         <button class="btn btn-sm btn-ghost" onclick="viewEspecime(${e.id})">Ver</button>
-        <button class="btn btn-sm" onclick="editEspecime(${JSON.stringify(e).replace(/"/g,'&quot;')})">Editar</button>
+        ${editButton}
       </td>
     </tr>`;
   }).join('');
@@ -284,12 +327,14 @@ function renderEspecimes(data) {
 async function viewEspecime(id) {
   try {
     const e = await api('GET', `/especimes/${id}`);
+    state.currentDetailEspecime = id;
     const body = document.getElementById('modal-detalhe-body');
     const loc = e.localidade;
     const tax = e.taxonomia;
+    const imagens = e.imagens || [];
     body.innerHTML = `
       <div class="detail-header">
-        <div class="detail-img">🌿</div>
+        ${renderDetailCover(imagens)}
         <div class="detail-info">
           <h3>${tax?.nome_cientifico || 'Espécime'}</h3>
           ${tax?.nome_comum ? `<div class="common">${tax.nome_comum}</div>` : ''}
@@ -317,9 +362,75 @@ async function viewEspecime(id) {
         ${field('Voucher GenBank', e.voucher_genbank)}
       </div>
       ${e.habitat ? `<div style="margin-top:16px"><div class="detail-field"><div class="key">Habitat</div><div class="val">${e.habitat}</div></div></div>` : ''}
-      ${e.observacoes ? `<div style="margin-top:8px"><div class="detail-field"><div class="key">Observações</div><div class="val">${e.observacoes}</div></div></div>` : ''}`;
+      ${e.observacoes ? `<div style="margin-top:8px"><div class="detail-field"><div class="key">Observações</div><div class="val">${e.observacoes}</div></div></div>` : ''}
+      ${renderImagesSection(e.id, imagens)}`;
     openModal('modal-detalhe-overlay');
   } catch(e) { toast('Erro ao carregar espécime', 'error'); }
+}
+
+function renderDetailCover(imagens) {
+  const principal = imagens.find(i => i.is_principal) || imagens[0];
+  if (!principal?.url_relativa) return '<div class="detail-img">🌿</div>';
+  const src = imageUrl(principal.url_relativa);
+  const alt = principal.descricao || principal.nome_arquivo || 'Imagem do espécime';
+  return `
+    <div class="detail-media">
+      <img class="detail-img" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" />
+      <button class="image-open-hit" data-src="${escapeAttr(src)}" data-alt="${escapeAttr(alt)}" onclick="openImageViewer(this.dataset.src, this.dataset.alt)"></button>
+    </div>`;
+}
+
+function renderImagesSection(especimeId, imagens) {
+  const gallery = imagens.length
+    ? imagens.map(img => `
+      <div class="image-card">
+        <img src="${escapeAttr(imageUrl(img.url_relativa))}" alt="${escapeAttr(img.descricao || img.nome_arquivo || 'Imagem do espécime')}" />
+        <button class="image-open-hit" data-src="${escapeAttr(imageUrl(img.url_relativa))}" data-alt="${escapeAttr(img.descricao || img.nome_arquivo || 'Imagem do espécime')}" onclick="openImageViewer(this.dataset.src, this.dataset.alt)"></button>
+        <div class="image-card-meta">
+          <strong>${img.is_principal ? 'Principal' : 'Imagem'}</strong>
+          <span>${img.descricao || img.nome_arquivo || ''}</span>
+        </div>
+        ${canWrite() ? `<button class="image-remove" onclick="deleteImagem(${especimeId}, ${img.id})">Remover</button>` : ''}
+      </div>
+    `).join('')
+    : '<div class="empty-inline">Nenhuma imagem enviada</div>';
+  return `
+    <div class="images-section">
+      <div class="section-title">Imagens</div>
+      <div class="image-gallery">${gallery}</div>
+    </div>`;
+}
+
+function openImageViewer(src, alt = 'Imagem do espécime') {
+  const body = document.getElementById('image-viewer-body');
+  body.innerHTML = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" />`;
+  openModal('modal-image-overlay');
+}
+
+async function uploadImagem(especimeId) {
+  const fileInput = document.getElementById('e-imagem');
+  const file = fileInput?.files?.[0];
+  if (!file) return false;
+
+  const form = new FormData();
+  form.append('arquivo', file);
+  const desc = document.getElementById('e-imagem-desc')?.value.trim();
+  if (desc) form.append('descricao', desc);
+  form.append('is_principal', document.getElementById('e-imagem-principal')?.checked ? 'true' : 'false');
+  await api('POST', `/especimes/${especimeId}/imagens`, form, true);
+  resetImagemFields();
+  return true;
+}
+
+async function deleteImagem(especimeId, imagemId) {
+  if (!canWrite()) return;
+  if (!confirm('Remover esta imagem?')) return;
+  try {
+    await api('DELETE', `/especimes/${especimeId}/imagens/${imagemId}`);
+    toast('Imagem removida!');
+    viewEspecime(especimeId);
+    searchEspecimes(state.specPage);
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 function field(label, val) {
@@ -327,10 +438,14 @@ function field(label, val) {
   return `<div class="detail-field"><div class="key">${label}</div><div class="val">${val}</div></div>`;
 }
 
-function editEspecime(e) {
+async function editEspecime(e) {
+  if (!canWrite()) return;
   if (typeof e === 'string') e = JSON.parse(e);
   state.editingEspecime = e.id;
   document.getElementById('modal-especime-title').textContent = 'Editar Espécime';
+  resetImagemFields();
+  document.getElementById('e-imagem-hint').textContent = 'A imagem selecionada será enviada ao salvar.';
+  await loadSelectsForEspecime();
   openModal('modal-especime-overlay');
   document.getElementById('e-codigo').value = e.codigo_catalogo || '';
   document.getElementById('e-taxonomia').value = e.taxonomia_id || '';
@@ -352,9 +467,11 @@ function editEspecime(e) {
   document.getElementById('e-genbank').value = e.voucher_genbank || '';
 }
 
-function openModalEspecime() {
+async function openModalEspecime() {
+  if (!canWrite()) return;
   state.editingEspecime = null;
   document.getElementById('modal-especime-title').textContent = 'Novo Espécime';
+  await loadSelectsForEspecime();
   ['e-codigo','e-coletor','e-num-campo','e-estagio','e-preservacao','e-loc-fisica','e-habitat','e-obs','e-id-por','e-genbank']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('e-taxonomia').value = '';
@@ -365,10 +482,13 @@ function openModalEspecime() {
   document.getElementById('e-tipo-coleta').value = 'campo';
   document.getElementById('e-sexo').value = '';
   document.getElementById('e-confianca').value = '';
+  resetImagemFields();
+  document.getElementById('e-imagem-hint').textContent = 'Você pode selecionar uma imagem agora; ela será enviada depois que o espécime for salvo.';
   openModal('modal-especime-overlay');
 }
 
 async function saveEspecime() {
+  if (!canWrite()) return;
   const btn = document.getElementById('btn-save-especime');
   btn.disabled = true; btn.textContent = '…';
   try {
@@ -393,12 +513,15 @@ async function saveEspecime() {
       voucher_genbank: document.getElementById('e-genbank').value || undefined,
     };
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+    let saved;
     if (state.editingEspecime) {
-      await api('PUT', `/especimes/${state.editingEspecime}`, body);
-      toast('Espécime atualizado!');
+      saved = await api('PUT', `/especimes/${state.editingEspecime}`, body);
+      const uploaded = await uploadImagem(state.editingEspecime);
+      toast(uploaded ? 'Espécime e imagem atualizados!' : 'Espécime atualizado!');
     } else {
-      await api('POST', '/especimes', body);
-      toast('Espécime cadastrado!');
+      saved = await api('POST', '/especimes', body);
+      const uploaded = await uploadImagem(saved.id);
+      toast(uploaded ? 'Espécime cadastrado com imagem!' : 'Espécime cadastrado!');
     }
     closeModal('modal-especime-overlay');
     searchEspecimes(state.specPage);
@@ -433,7 +556,7 @@ async function loadTaxonomias(page = 1) {
       <td data-label="Gênero">${t.genero || '—'}</td>
       <td data-label="Nome Comum">${t.nome_comum || '—'}</td>
       <td data-label="Ações" class="td-actions">
-        <button class="btn btn-sm btn-ghost" onclick='editTaxonomia(${JSON.stringify(t).replace(/'/g,"&#39;")})'>Editar</button>
+        ${canWrite() ? `<button class="btn btn-sm btn-ghost" onclick='editTaxonomia(${JSON.stringify(t).replace(/'/g,"&#39;")})'>Editar</button>` : '<span style="color:var(--muted);font-size:.78rem">Somente leitura</span>'}
       </td>
     </tr>`).join('');
     renderPagination('pag-taxonomias', data.page, data.pages, p => loadTaxonomias(p));
@@ -442,6 +565,7 @@ async function loadTaxonomias(page = 1) {
 }
 
 function openModalTaxonomia() {
+  if (!canWrite()) return;
   state.editingTax = null;
   document.getElementById('modal-tax-title').textContent = 'Nova Taxonomia';
   ['t-nome-ci','t-reino','t-filo','t-classe','t-ordem','t-familia','t-genero','t-epiteto','t-autor','t-nome-com','t-notas']
@@ -451,6 +575,7 @@ function openModalTaxonomia() {
 }
 
 function editTaxonomia(t) {
+  if (!canWrite()) return;
   if (typeof t === 'string') t = JSON.parse(t);
   state.editingTax = t.id;
   document.getElementById('modal-tax-title').textContent = 'Editar Taxonomia';
@@ -470,6 +595,7 @@ function editTaxonomia(t) {
 }
 
 async function saveTaxonomia() {
+  if (!canWrite()) return;
   try {
     const body = {
       nome_cientifico: document.getElementById('t-nome-ci').value.trim(),
@@ -520,7 +646,7 @@ async function loadLocalidades(page = 1) {
       <td data-label="Bioma">${l.bioma || '—'}</td>
       <td data-label="Coords">${l.latitude != null ? `${l.latitude.toFixed(3)}, ${l.longitude?.toFixed(3)}` : '—'}</td>
       <td data-label="Ações" class="td-actions">
-        <button class="btn btn-sm btn-ghost" onclick='editLocalidade(${JSON.stringify(l).replace(/'/g,"&#39;")})'>Editar</button>
+        ${canWrite() ? `<button class="btn btn-sm btn-ghost" onclick='editLocalidade(${JSON.stringify(l).replace(/'/g,"&#39;")})'>Editar</button>` : '<span style="color:var(--muted);font-size:.78rem">Somente leitura</span>'}
       </td>
     </tr>`).join('');
     renderPagination('pag-localidades', data.page, data.pages, p => loadLocalidades(p));
@@ -529,6 +655,7 @@ async function loadLocalidades(page = 1) {
 }
 
 function openModalLocalidade() {
+  if (!canWrite()) return;
   state.editingLoc = null;
   document.getElementById('modal-loc-title').textContent = 'Nova Localidade';
   ['l-estado','l-municipio','l-localidade','l-lat','l-lon','l-alt','l-prec','l-metodo','l-bioma']
@@ -538,6 +665,7 @@ function openModalLocalidade() {
 }
 
 function editLocalidade(l) {
+  if (!canWrite()) return;
   if (typeof l === 'string') l = JSON.parse(l);
   state.editingLoc = l.id;
   document.getElementById('modal-loc-title').textContent = 'Editar Localidade';
@@ -555,6 +683,7 @@ function editLocalidade(l) {
 }
 
 async function saveLocalidade() {
+  if (!canWrite()) return;
   try {
     const body = {
       pais: document.getElementById('l-pais').value || 'Brasil',
@@ -593,7 +722,7 @@ function switchLoanTab(tab) {
 async function loadSelectsForEmprestimo() {
   try {
     if (!state.allEspecimes.length) {
-      const r = await api('POST', '/especimes/buscar', { page:1, per_page:200, status:'ativo' });
+      const r = await api('POST', '/especimes/buscar', { page:1, per_page:100, status:'ativo' });
       state.allEspecimes = r?.items || [];
     }
     fillSelect('em-especime', state.allEspecimes,
@@ -639,6 +768,7 @@ async function loadEmprestimos() {
 }
 
 function openModalEmprestimo() {
+  if (!canWrite()) return;
   ['em-inst','em-pesq','em-saida','em-retorno','em-final','em-obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('em-especime').value = '';
   const today = new Date().toISOString().substring(0,10);
@@ -647,6 +777,7 @@ function openModalEmprestimo() {
 }
 
 async function saveEmprestimo() {
+  if (!canWrite()) return;
   try {
     const body = {
       especime_id: parseInt(document.getElementById('em-especime').value),
@@ -665,6 +796,7 @@ async function saveEmprestimo() {
 }
 
 async function devolverEmprestimo(id) {
+  if (!canWrite()) return;
   if (!confirm('Confirmar devolução deste espécime?')) return;
   try {
     const today = new Date().toISOString();
@@ -697,12 +829,14 @@ async function loadUsuarios() {
 }
 
 function openModalUsuario() {
+  if (!canAdmin()) return;
   ['u-nome','u-email','u-senha'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('u-perfil').value = 'leitor';
   openModal('modal-usr-overlay');
 }
 
 async function saveUsuario() {
+  if (!canAdmin()) return;
   try {
     const body = {
       nome: document.getElementById('u-nome').value.trim(),
@@ -718,6 +852,7 @@ async function saveUsuario() {
 }
 
 async function toggleUserAtivo(id, ativo) {
+  if (!canAdmin()) return;
   if (!confirm(`${ativo ? 'Desativar' : 'Ativar'} este usuário?`)) return;
   try {
     await api('PUT', `/usuarios/${id}`, { ativo: !ativo });
