@@ -1,8 +1,7 @@
-import asyncio
+import os
 from logging.config import fileConfig
-from sqlalchemy import pool
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Importar modelos para que o Alembic os detecte
@@ -16,8 +15,33 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def load_dotenv_if_present() -> None:
+    for path in (".env", "../.env"):
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def get_database_url() -> str:
+    load_dotenv_if_present()
+    url = (
+        os.getenv("DATABASE_URL_SYNC")
+        or os.getenv("DATABASE_URL")
+        or config.get_main_option("sqlalchemy.url")
+    )
+    if not url:
+        raise RuntimeError("DATABASE_URL ou DATABASE_URL_SYNC deve estar configurada para o Alembic")
+    return url.replace("postgresql+asyncpg", "postgresql+psycopg2")
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -34,31 +58,11 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    # Substituir asyncpg por psycopg2 para migrações síncronas
-    cfg = config.get_section(config.config_ini_section, {})
-    url = cfg.get("sqlalchemy.url", "")
-    if "asyncpg" in url:
-        url = url.replace("postgresql+asyncpg", "postgresql+psycopg2")
-    cfg["sqlalchemy.url"] = url
-
-    connectable = async_engine_from_config(
-        cfg,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        # Usar psycopg2 para migrações
-    )
-    # Fallback síncrono
-    from sqlalchemy import create_engine
-    sync_url = url.replace("postgresql+asyncpg", "postgresql+psycopg2")
-    sync_engine = create_engine(sync_url)
-    with sync_engine.connect() as conn:
-        do_run_migrations(conn)
-    sync_engine.dispose()
-
-
 def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    engine = create_engine(get_database_url(), pool_pre_ping=True)
+    with engine.connect() as conn:
+        do_run_migrations(conn)
+    engine.dispose()
 
 
 if context.is_offline_mode():

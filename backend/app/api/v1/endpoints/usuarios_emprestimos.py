@@ -5,9 +5,9 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models.models import Usuario, Emprestimo
+from app.models.models import Emprestimo
 from app.schemas.schemas import (
-    UsuarioCreate, UsuarioOut, UsuarioUpdate,
+    UsuarioCreate, UsuarioOut, UsuarioUpdate, UsuarioSelfUpdate,
     EmprestimoCreate, EmprestimoUpdate, EmprestimoOut,
     PaginatedResponse,
 )
@@ -68,14 +68,16 @@ async def atualizar_usuario(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    if current_user.id != uid and current_user.perfil != "administrador":
+    is_admin = current_user.perfil == "administrador"
+    if current_user.id != uid and not is_admin:
         raise HTTPException(403, "Acesso negado")
-    # Apenas admin pode mudar perfil
-    if data.perfil is not None and current_user.perfil != "administrador":
-        raise HTTPException(403, "Apenas administradores podem alterar perfis")
+    if not is_admin and (data.perfil is not None or data.ativo is not None):
+        raise HTTPException(403, "Apenas administradores podem alterar perfil ou status")
     u = await UsuarioService.get_by_id(db, uid)
     if not u:
         raise HTTPException(404, "Usuário não encontrado")
+    if not is_admin:
+        data = UsuarioSelfUpdate(**data.model_dump(exclude_unset=True, exclude={"perfil", "ativo"}))
     return await UsuarioService.update(db, u, data)
 
 

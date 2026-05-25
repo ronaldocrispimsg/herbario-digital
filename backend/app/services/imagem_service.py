@@ -1,10 +1,12 @@
 import os
 import uuid
 import aiofiles
+from io import BytesIO
 from pathlib import Path
 from typing import Optional, List
 from fastapi import UploadFile, HTTPException, status
-from PIL import Image as PILImage
+from PIL import Image as PILImage, UnidentifiedImageError
+from PIL.Image import DecompressionBombError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -13,6 +15,18 @@ from app.core.config import settings
 
 
 class ImagemService:
+    FORMAT_MIME = {
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "TIFF": "image/tiff",
+        "WEBP": "image/webp",
+    }
+    FORMAT_EXT = {
+        "JPEG": ".jpg",
+        "PNG": ".png",
+        "TIFF": ".tiff",
+        "WEBP": ".webp",
+    }
 
     @staticmethod
     async def upload(
@@ -22,14 +36,6 @@ class ImagemService:
         descricao: Optional[str] = None,
         is_principal: bool = False,
     ) -> ImagemEspecime:
-        # Validar tipo MIME
-        if arquivo.content_type not in settings.allowed_image_types_list:
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail=f"Tipo de arquivo não suportado: {arquivo.content_type}. "
-                       f"Permitidos: {', '.join(settings.allowed_image_types_list)}",
-            )
-
         # Ler conteúdo e validar tamanho
         conteudo = await arquivo.read()
         if len(conteudo) > settings.max_image_size_bytes:
@@ -37,9 +43,49 @@ class ImagemService:
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"Arquivo muito grande. Máximo: {settings.MAX_IMAGE_SIZE_MB}MB",
             )
+        if not conteudo:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Arquivo vazio")
+
+        PILImage.MAX_IMAGE_PIXELS = settings.MAX_IMAGE_PIXELS
+        try:
+            with PILImage.open(BytesIO(conteudo)) as img:
+                img.verify()
+            with PILImage.open(BytesIO(conteudo)) as img:
+                formato = img.format
+                largura, altura = img.size
+                if formato not in ImagemService.FORMAT_MIME:
+                    raise HTTPException(
+                        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                        detail="Formato de imagem não suportado",
+                    )
+                tipo_mime = ImagemService.FORMAT_MIME[formato]
+                if tipo_mime not in settings.allowed_image_types_list:
+                    raise HTTPException(
+                        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                        detail=f"Tipo de imagem não permitido: {tipo_mime}",
+                    )
+                sanitized = BytesIO()
+                clean_img = img.copy()
+                if formato == "JPEG" and clean_img.mode not in ("RGB", "L"):
+                    clean_img = clean_img.convert("RGB")
+                clean_img.save(sanitized, format=formato)
+                conteudo_sanitizado = sanitized.getvalue()
+        except HTTPException:
+            raise
+        except (UnidentifiedImageError, OSError, ValueError, DecompressionBombError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Arquivo enviado não é uma imagem válida",
+            ) from exc
+
+        if len(conteudo_sanitizado) > settings.max_image_size_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Arquivo muito grande após processamento. Máximo: {settings.MAX_IMAGE_SIZE_MB}MB",
+            )
 
         # Gerar nome único
-        ext = Path(arquivo.filename).suffix or ".jpg"
+        ext = ImagemService.FORMAT_EXT[formato]
         nome_arquivo = f"{uuid.uuid4().hex}{ext}"
         pasta_especime = Path(settings.UPLOAD_DIR) / str(especime_id)
         pasta_especime.mkdir(parents=True, exist_ok=True)
@@ -47,15 +93,7 @@ class ImagemService:
 
         # Salvar arquivo
         async with aiofiles.open(caminho_completo, "wb") as f:
-            await f.write(conteudo)
-
-        # Obter dimensões
-        largura, altura = None, None
-        try:
-            img = PILImage.open(caminho_completo)
-            largura, altura = img.size
-        except Exception:
-            pass
+            await f.write(conteudo_sanitizado)
 
         url_relativa = f"/uploads/{especime_id}/{nome_arquivo}"
 
@@ -72,11 +110,11 @@ class ImagemService:
 
         imagem = ImagemEspecime(
             especime_id=especime_id,
-            nome_arquivo=arquivo.filename,
+            nome_arquivo=Path(arquivo.filename or nome_arquivo).name,
             caminho=str(caminho_completo),
             url_relativa=url_relativa,
-            tipo_mime=arquivo.content_type,
-            tamanho_bytes=len(conteudo),
+            tipo_mime=tipo_mime,
+            tamanho_bytes=len(conteudo_sanitizado),
             largura_px=largura,
             altura_px=altura,
             descricao=descricao,

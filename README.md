@@ -34,12 +34,9 @@ Acesse:
 - **Swagger UI:** http://localhost:8000/docs
 - **ReDoc:** http://localhost:8000/redoc
 
-O backend cria as tabelas e o usuário admin automaticamente na primeira inicialização:
+O backend aplica migrations na primeira inicialização. O usuário admin inicial é criado pelo seed somente quando `ADMIN_EMAIL` e `ADMIN_PASSWORD` estiverem configurados.
 
-- **Email:** admin@bioacervo.org
-- **Senha:** Admin@1234
-
-> Troque a senha do admin e o `SECRET_KEY` antes de usar em produção.
+> Defina `ADMIN_PASSWORD` e `SECRET_KEY` próprios antes de usar em produção.
 
 ### Estrutura Docker
 
@@ -100,9 +97,12 @@ cp .env.example .env
 
 Campos essenciais no `.env`:
 ```env
-DATABASE_URL=postgresql+asyncpg://usuario:senha@localhost:5432/bioacervo
-DATABASE_URL_SYNC=postgresql+psycopg2://usuario:senha@localhost:5432/bioacervo
+DATABASE_URL=postgresql+asyncpg://bioacervo:bioacervo_dev_password@database:5432/bioacervo
+DATABASE_URL_SYNC=postgresql+psycopg2://bioacervo:bioacervo_dev_password@database:5432/bioacervo
 SECRET_KEY=gere-uma-chave-segura-aqui
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=defina-uma-senha-forte
+CORS_ORIGINS=http://localhost:8080
 ```
 
 Para gerar uma chave segura:
@@ -110,17 +110,15 @@ Para gerar uma chave segura:
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### 5. Criar tabelas e usuário inicial
+### 5. Migrar tabelas e usuário inicial
 
 ```bash
+alembic upgrade head
 python seed.py
 ```
 
-Isso cria todas as tabelas e o usuário admin:
-- **Email:** admin@bioacervo.org
-- **Senha:** Admin@1234
-
-> ⚠️ Troque a senha do admin após o primeiro acesso!
+O seed cria o usuário admin somente a partir de `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
+Em desenvolvimento, sem essas variáveis, ele usa credenciais locais com aviso; em produção, não cria admin padrão.
 
 ### 6. Executar o servidor
 
@@ -142,7 +140,7 @@ Todas as rotas (exceto `/health` e `/`) exigem autenticação via **JWT Bearer T
 # Obter token
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin@bioacervo.org&password=Admin@1234"
+  -d "username=$ADMIN_EMAIL&password=$ADMIN_PASSWORD"
 
 # Usar token
 curl -H "Authorization: Bearer <TOKEN>" http://localhost:8000/api/v1/especimes

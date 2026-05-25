@@ -22,6 +22,7 @@ services:
       context: ./backend
     container_name: bioacervo-backend
     restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     env_file:
       - .env
     depends_on:
@@ -44,6 +45,7 @@ services:
       context: ./bucket
     container_name: bioacervo-bucket
     restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     volumes:
       - ./bucket/data:/data
     healthcheck:

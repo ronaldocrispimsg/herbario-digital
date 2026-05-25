@@ -43,16 +43,17 @@ Utilize `/api/v1/auth/login` para obter um token JWT Bearer.
     lifespan=lifespan,
 )
 
-# CORS — ajuste as origens conforme necessário
+# CORS: em produção, configure CORS_ORIGINS com domínios explícitos.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, restrinja para domínios específicos
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Servir arquivos persistidos no bucket via /uploads.
+# TODO: avaliar regra de negócio para tornar imagens privadas/autorizadas sem quebrar a galeria atual.
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 

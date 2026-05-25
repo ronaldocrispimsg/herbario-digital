@@ -1,9 +1,7 @@
-import os
 import csv
 import uuid
 import zipfile
 from io import BytesIO
-from pathlib import Path
 from typing import List
 from datetime import datetime
 
@@ -130,8 +128,6 @@ class ExportService:
         especimes = result.scalars().all()
 
         # Montar CSV em memória
-        csv_buffer = BytesIO()
-        csv_text = ""
         rows = [ExportService._especime_to_dwc(e) for e in especimes]
 
         # Escrever via StringIO
@@ -210,7 +206,7 @@ class EtiquetaService:
             loc = especime.localidade
             loc_str = ", ".join(filter(None, [loc.municipio, loc.estado, loc.pais]))
             dados.append(("Local:", loc_str))
-            if loc.latitude and loc.longitude:
+            if loc.latitude is not None and loc.longitude is not None:
                 dados.append(("Coordenadas:", f"{loc.latitude:.4f}, {loc.longitude:.4f}"))
 
         for label, valor in dados:

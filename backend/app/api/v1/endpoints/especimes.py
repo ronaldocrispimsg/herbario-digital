@@ -1,14 +1,13 @@
 import math
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from io import BytesIO
 
 from app.db.session import get_db
 from app.schemas.schemas import (
     EspecimeCreate, EspecimeUpdate, EspecimeOut,
-    BuscaEspecime, PaginatedResponse, ImagemOut,
+    BuscaEspecime, PaginatedResponse, ImagemOut, ExportDwcaRequest,
 )
 from app.services.especime_service import EspecimeService
 from app.services.imagem_service import ImagemService
@@ -51,6 +50,39 @@ async def buscar(
         per_page=filtros.per_page,
         pages=math.ceil(total / filtros.per_page) if total else 0,
         items=[EspecimeOut.model_validate(i) for i in items],
+    )
+
+
+# ─── Exportação DwC-A ─────────────────────────────────────────────────────────
+
+@router.post("/exportar/dwca", summary="Exportar seleção em Darwin Core Archive")
+async def exportar_dwca(
+    payload: ExportDwcaRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_roles("administrador", "curador")),
+):
+    ids = payload.ids if payload else None
+    conteudo = await ExportService.exportar_dwca(db, ids)
+    return Response(
+        content=conteudo,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=dwca_export.zip",
+            "Content-Length": str(len(conteudo)),
+        },
+    )
+
+
+@router.get("/exportar/dwca/todos", summary="Exportar todos os espécimes em Darwin Core Archive")
+async def exportar_dwca_todos(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_roles("administrador", "curador")),
+):
+    conteudo = await ExportService.exportar_dwca(db)
+    return Response(
+        content=conteudo,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=dwca_completo.zip"},
     )
 
 
@@ -143,38 +175,6 @@ async def remover_imagem(
     removido = await ImagemService.deletar(db, imagem_id, especime_id)
     if not removido:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
-
-
-# ─── Exportação DwC-A ─────────────────────────────────────────────────────────
-
-@router.post("/exportar/dwca", summary="Exportar seleção em Darwin Core Archive")
-async def exportar_dwca(
-    ids: Optional[List[int]] = None,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
-):
-    conteudo = await ExportService.exportar_dwca(db, ids)
-    return Response(
-        content=conteudo,
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": "attachment; filename=dwca_export.zip",
-            "Content-Length": str(len(conteudo)),
-        },
-    )
-
-
-@router.get("/exportar/dwca/todos", summary="Exportar todos os espécimes em Darwin Core Archive")
-async def exportar_dwca_todos(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
-):
-    conteudo = await ExportService.exportar_dwca(db)
-    return Response(
-        content=conteudo,
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=dwca_completo.zip"},
-    )
 
 
 # ─── Etiqueta PDF ─────────────────────────────────────────────────────────────

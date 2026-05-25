@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from datetime import datetime
 
 from app.models.models import Usuario
-from app.schemas.schemas import UsuarioCreate, UsuarioUpdate
+from app.schemas.schemas import UsuarioCreate, UsuarioUpdate, UsuarioSelfUpdate
 from app.core.security import get_password_hash, verify_password
 
 
@@ -34,7 +34,7 @@ class UsuarioService:
         return usuario
 
     @staticmethod
-    async def update(db: AsyncSession, usuario: Usuario, data: UsuarioUpdate) -> Usuario:
+    async def update(db: AsyncSession, usuario: Usuario, data: UsuarioUpdate | UsuarioSelfUpdate) -> Usuario:
         update_data = data.model_dump(exclude_unset=True)
         if "senha" in update_data:
             update_data["senha_hash"] = get_password_hash(update_data.pop("senha"))

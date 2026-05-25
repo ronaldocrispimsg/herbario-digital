@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Float, DateTime, Boolean,
-    ForeignKey, Enum, Index, func
+    ForeignKey, Enum, Index
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB

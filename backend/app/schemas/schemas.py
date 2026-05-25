@@ -37,6 +37,11 @@ class UsuarioBase(BaseModel):
 class UsuarioCreate(UsuarioBase):
     senha: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
 
+    @field_validator("senha")
+    @classmethod
+    def validar_senha(cls, value: str) -> str:
+        return validar_senha_usuario(value)
+
 
 class UsuarioUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=2, max_length=150)
@@ -45,9 +50,40 @@ class UsuarioUpdate(BaseModel):
     ativo: Optional[bool] = None
     senha: Optional[str] = Field(None, min_length=8)
 
+    @field_validator("senha")
+    @classmethod
+    def validar_senha(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return validar_senha_usuario(value)
+
+
+class UsuarioSelfUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=2, max_length=150)
+    email: Optional[EmailStr] = None
+    senha: Optional[str] = Field(None, min_length=8)
+
+    @field_validator("senha")
+    @classmethod
+    def validar_senha(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return validar_senha_usuario(value)
+
+
+def validar_senha_usuario(value: str) -> str:
+    if value.isdigit():
+        raise ValueError("A senha não pode conter apenas números")
+    if not any(ch.isalpha() for ch in value):
+        raise ValueError("A senha deve conter pelo menos uma letra")
+    if not any(ch.isdigit() for ch in value):
+        raise ValueError("A senha deve conter pelo menos um número")
+    return value
+
 
 class UsuarioOut(UsuarioBase):
     id: int
+    email: str
     ativo: bool
     criado_em: datetime
 
@@ -59,6 +95,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     usuario: UsuarioOut
+
+
+class ExportDwcaRequest(BaseModel):
+    ids: Optional[List[int]] = None
 
 
 # ─── Taxonomia ────────────────────────────────────────────────────────────────

@@ -490,6 +490,7 @@ tbody td { padding: 12px 14px; font-size: .86rem; vertical-align: middle; }
 .toast.success { border-color: var(--moss); }
 .toast.error   { border-color: var(--danger); }
 .toast .toast-icon { font-size: 1rem; flex-shrink: 0; }
+.toast span:last-child { white-space: pre-line; }
 .toast.success .toast-icon { color: var(--leaf); }
 .toast.error   .toast-icon { color: #d46844; }
 @keyframes slideIn {
