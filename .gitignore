@@ -10,9 +10,11 @@ database/data/
 # Bucket
 bucket/data/*
 !bucket/data/.gitkeep
+
 !bucket/data/images/
 bucket/data/images/**
 !bucket/data/images/.gitkeep
+
 !bucket/data/exports/
 bucket/data/exports/**
 !bucket/data/exports/.gitkeep
