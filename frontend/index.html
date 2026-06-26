@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BioAcervo — Herbário Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="logo"><span class="logo-icon">🌿</span> BioAcervo</div>
+    <nav id="nav" style="display:none">
+      <button class="nav-btn active" data-screen="dashboard">Dashboard</button>
+      <button class="nav-btn" data-screen="especimes">Espécimes</button>
+      <button class="nav-btn" data-screen="taxonomias">Taxonomias</button>
+      <button class="nav-btn" data-screen="localidades">Localidades</button>
+      <button class="nav-btn" data-screen="emprestimos">Empréstimos</button>
+      <button class="nav-btn" data-screen="usuarios" id="nav-usuarios" style="display:none">Usuários</button>
+    </nav>
+    <div id="topbar-right" style="display:none">
+      <div class="badge-user" id="user-badge">
+        <span>🌱</span>
+        <span>Olá, <strong id="user-name-badge">—</strong></span>
+        <span style="color:var(--border2)">|</span>
+        <button onclick="logout()" style="background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="main">
+    <!-- ── DASHBOARD ── -->
+    <div id="screen-dashboard" class="screen">
+      <div class="page-header">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Visão geral do acervo</p>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="loadDashboard()">↺ Atualizar</button>
+      </div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="label">Total espécimes</div><div class="value" id="stat-total">—</div></div>
+        <div class="stat-card"><div class="label">Ativos</div><div class="value" id="stat-ativos" style="color:var(--leaf)">—</div></div>
+        <div class="stat-card"><div class="label">Emprestados</div><div class="value" id="stat-emprestados" style="color:#d4a83c">—</div></div>
+        <div class="stat-card"><div class="label">Taxonomias</div><div class="value" id="stat-taxonomias">—</div></div>
+        <div class="stat-card"><div class="label">Localidades</div><div class="value" id="stat-localidades">—</div></div>
+        <div class="stat-card"><div class="label">Usuários</div><div class="value" id="stat-usuarios">—</div></div>
+      </div>
+      <div class="charts-grid" id="charts-area">
+        <div class="chart-card">
+          <h4>Status dos Espécimes</h4>
+          <div class="bar-chart" id="chart-status"></div>
+        </div>
+        <div class="chart-card">
+          <h4>Top Famílias</h4>
+          <div class="bar-chart" id="chart-familias"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ESPECIMES ── -->
+    <div id="screen-especimes" class="screen">
+      <div class="page-header">
+        <div><h2>Espécimes</h2><p>Catálogo do acervo biológico</p></div>
+        <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
+      </div>
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="busca-nome" placeholder="Nome científico, família, gênero…" oninput="debounceSearch()" />
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="toggleFilters()">⚙ Filtros</button>
+      </div>
+      <div class="filter-row" id="filter-row" style="display:none">
+        <div class="field"><label>Estado</label><input id="f-estado" placeholder="ex: Minas Gerais" /></div>
+        <div class="field"><label>Município</label><input id="f-municipio" placeholder="ex: Belo Horizonte" /></div>
+        <div class="field"><label>Bioma</label><input id="f-bioma" placeholder="ex: Cerrado" /></div>
+        <div class="field"><label>Coletor</label><input id="f-coletor" placeholder="Nome do coletor" /></div>
+        <div class="field"><label>Status</label>
+          <select id="f-status">
+            <option value="">Todos</option>
+            <option value="ativo">Ativo</option>
+            <option value="emprestado">Emprestado</option>
+            <option value="em_processamento">Em Processamento</option>
+            <option value="descartado">Descartado</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:6px">
+          <button class="btn btn-sm" onclick="searchEspecimes(1)">Buscar</button>
+          <button class="btn btn-sm btn-ghost" onclick="clearFilters()">Limpar</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nome Científico</th>
+              <th>Família</th>
+              <th>Localidade</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-especimes"><tr class="loading-row"><td colspan="6"><div class="loader"></div></td></tr></tbody>
+        </table>
+        <div class="pagination" id="pag-especimes" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ── TAXONOMIAS ── -->
+    <div id="screen-taxonomias" class="screen">
+      <div class="page-header">
+        <div><h2>Taxonomias</h2><p>Classificação taxonômica das espécies</p></div>
+        <button class="btn btn-sm write-action" onclick="openModalTaxonomia()">+ Nova Taxonomia</button>
+      </div>
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="busca-tax" placeholder="Nome científico, família, gênero…" oninput="debounceSearchTax()" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Nome Científico</th><th>Família</th><th>Gênero</th><th>Nome Comum</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-taxonomias"></tbody>
+        </table>
+        <div class="pagination" id="pag-taxonomias" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ── LOCALIDADES ── -->
+    <div id="screen-localidades" class="screen">
+      <div class="page-header">
+        <div><h2>Localidades</h2><p>Dados geográficos de coleta</p></div>
+        <button class="btn btn-sm write-action" onclick="openModalLocalidade()">+ Nova Localidade</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>País</th><th>Estado</th><th>Município</th><th>Bioma</th><th>Coords</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-localidades"></tbody>
+        </table>
+        <div class="pagination" id="pag-localidades" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ── EMPRESTIMOS ── -->
+    <div id="screen-emprestimos" class="screen">
+      <div class="page-header">
+        <div><h2>Empréstimos</h2><p>Gestão de espécimes emprestados</p></div>
+        <button class="btn btn-sm write-action" onclick="openModalEmprestimo()">+ Registrar Empréstimo</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="ativos" onclick="switchLoanTab('ativos')">Ativos</button>
+        <button class="tab-btn" data-tab="todos" onclick="switchLoanTab('todos')">Todos</button>
+      </div>
+      <div id="emprestimos-list"></div>
+    </div>
+
+    <!-- ── USUARIOS ── -->
+    <div id="screen-usuarios" class="screen">
+      <div class="page-header">
+        <div><h2>Usuários</h2><p>Gestão de acesso ao sistema</p></div>
+        <button class="btn btn-sm admin-action" onclick="openModalUsuario()">+ Novo Usuário</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="tbody-usuarios"></tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── MODALS ── -->
+
+<!-- Espécime -->
+<div class="overlay" id="modal-especime-overlay" onclick="closeOverlay(event,'modal-especime-overlay')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-especime-title">Novo Espécime</h3>
+      <button class="modal-close" onclick="closeModal('modal-especime-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="section-title">Identificação</div>
+        <div class="field"><label>Código Catálogo *</label><input id="e-codigo" placeholder="HERB-0001" /></div>
+        <div class="field"><label>Taxonomia *</label>
+          <select id="e-taxonomia">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="section-title">Coleta</div>
+        <div class="field"><label>Data Coleta</label><input type="date" id="e-data-coleta" /></div>
+        <div class="field"><label>Tipo Coleta</label>
+          <select id="e-tipo-coleta">
+            <option value="campo">Campo</option>
+            <option value="doacao">Doação</option>
+            <option value="intercambio">Intercâmbio</option>
+            <option value="compra">Compra</option>
+          </select>
+        </div>
+        <div class="field"><label>Coletor Principal</label><input id="e-coletor" placeholder="Nome do coletor" /></div>
+        <div class="field"><label>Nº de Campo</label><input id="e-num-campo" placeholder="Ex: MF-2024-001" /></div>
+        <div class="field"><label>Localidade</label>
+          <select id="e-localidade"><option value="">— Sem localidade —</option></select>
+        </div>
+        <div class="field"><label>Nº Indivíduos</label><input type="number" id="e-num-ind" value="1" min="1" /></div>
+        <div class="section-title">Descrição</div>
+        <div class="field"><label>Sexo</label>
+          <select id="e-sexo"><option value="">Indeterminado</option><option>Masculino</option><option>Feminino</option><option>Hermafrodita</option></select>
+        </div>
+        <div class="field"><label>Estágio de Vida</label><input id="e-estagio" placeholder="adulto, juvenil…" /></div>
+        <div class="field"><label>Meio de Preservação</label><input id="e-preservacao" placeholder="etanol, seco…" /></div>
+        <div class="field"><label>Localização Física</label><input id="e-loc-fisica" placeholder="Gaveta 3, Caixa 12" /></div>
+        <div class="field col-full"><label>Habitat</label><textarea id="e-habitat" rows="2" placeholder="Descrição do habitat…"></textarea></div>
+        <div class="field col-full"><label>Observações</label><textarea id="e-obs" rows="2" placeholder="Observações gerais…"></textarea></div>
+        <div class="section-title">Curadoria</div>
+        <div class="field"><label>Status</label>
+          <select id="e-status">
+            <option value="ativo">Ativo</option>
+            <option value="em_processamento">Em Processamento</option>
+            <option value="descartado">Descartado</option>
+          </select>
+        </div>
+        <div class="field"><label>Identificado por</label><input id="e-id-por" placeholder="Nome do identificador" /></div>
+        <div class="field"><label>Confiança ID</label>
+          <select id="e-confianca"><option value="">—</option><option value="alta">Alta</option><option value="média">Média</option><option value="baixa">Baixa</option></select>
+        </div>
+        <div class="field"><label>Voucher GenBank</label><input id="e-genbank" placeholder="ACC-XXXXX" /></div>
+        <div class="section-title">Imagens</div>
+        <div class="field col-full">
+          <label>Enviar imagem</label>
+          <input type="file" id="e-imagem" accept="image/jpeg,image/png,image/tiff,image/webp" />
+        </div>
+        <div class="field">
+          <label>Descrição da imagem</label>
+          <input id="e-imagem-desc" placeholder="Ex: vista geral, detalhe floral" />
+        </div>
+        <label class="check-field">
+          <input type="checkbox" id="e-imagem-principal" />
+          <span>Imagem principal</span>
+        </label>
+        <div class="upload-hint col-full" id="e-imagem-hint"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-especime-overlay')">Cancelar</button>
+      <button class="btn btn-sm" onclick="saveEspecime()" id="btn-save-especime">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhe Espécime -->
+<div class="overlay" id="modal-detalhe-overlay" onclick="closeOverlay(event,'modal-detalhe-overlay')">
+  <div class="modal" style="width:min(800px,100%)">
+    <div class="modal-header">
+      <h3>Detalhes do Espécime</h3>
+      <button class="modal-close" onclick="closeModal('modal-detalhe-overlay')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-detalhe-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-ghost" onclick="closeModal('modal-detalhe-overlay')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Visualização de Imagem -->
+<div class="overlay" id="modal-image-overlay" onclick="closeOverlay(event,'modal-image-overlay')">
+  <div class="modal image-viewer-modal">
+    <div class="modal-header">
+      <h3>Imagem do Espécime</h3>
+      <button class="modal-close" onclick="closeModal('modal-image-overlay')">✕</button>
+    </div>
+    <div class="modal-body image-viewer-body" id="image-viewer-body"></div>
+  </div>
+</div>
+
+<!-- Taxonomia -->
+<div class="overlay" id="modal-tax-overlay" onclick="closeOverlay(event,'modal-tax-overlay')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-tax-title">Nova Taxonomia</h3>
+      <button class="modal-close" onclick="closeModal('modal-tax-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field col-full"><label>Nome Científico *</label><input id="t-nome-ci" placeholder="Genus species" /></div>
+        <div class="field"><label>Reino</label><input id="t-reino" placeholder="Plantae" /></div>
+        <div class="field"><label>Filo</label><input id="t-filo" /></div>
+        <div class="field"><label>Classe</label><input id="t-classe" /></div>
+        <div class="field"><label>Ordem</label><input id="t-ordem" /></div>
+        <div class="field"><label>Família</label><input id="t-familia" /></div>
+        <div class="field"><label>Gênero</label><input id="t-genero" /></div>
+        <div class="field"><label>Epíteto Específico</label><input id="t-epiteto" /></div>
+        <div class="field"><label>Autor Descrição</label><input id="t-autor" /></div>
+        <div class="field"><label>Ano Descrição</label><input type="number" id="t-ano" min="1700" max="2100" /></div>
+        <div class="field col-full"><label>Nome Comum</label><input id="t-nome-com" /></div>
+        <div class="field col-full"><label>Notas Taxonômicas</label><textarea id="t-notas" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-tax-overlay')">Cancelar</button>
+      <button class="btn btn-sm" onclick="saveTaxonomia()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Localidade -->
+<div class="overlay" id="modal-loc-overlay" onclick="closeOverlay(event,'modal-loc-overlay')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-loc-title">Nova Localidade</h3>
+      <button class="modal-close" onclick="closeModal('modal-loc-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>País</label><input id="l-pais" value="Brasil" /></div>
+        <div class="field"><label>Estado</label><input id="l-estado" /></div>
+        <div class="field"><label>Município</label><input id="l-municipio" /></div>
+        <div class="field col-full"><label>Localidade (descrição)</label><input id="l-localidade" /></div>
+        <div class="field"><label>Latitude</label><input type="number" id="l-lat" step="any" placeholder="-15.000" /></div>
+        <div class="field"><label>Longitude</label><input type="number" id="l-lon" step="any" placeholder="-47.000" /></div>
+        <div class="field"><label>Altitude (m)</label><input type="number" id="l-alt" /></div>
+        <div class="field"><label>Precisão Coords (m)</label><input type="number" id="l-prec" /></div>
+        <div class="field"><label>Método Geoloc.</label><input id="l-metodo" placeholder="GPS, Google Maps…" /></div>
+        <div class="field"><label>Bioma</label><input id="l-bioma" placeholder="Cerrado, Mata Atlântica…" /></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-loc-overlay')">Cancelar</button>
+      <button class="btn btn-sm" onclick="saveLocalidade()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Emprestimo -->
+<div class="overlay" id="modal-emp-overlay" onclick="closeOverlay(event,'modal-emp-overlay')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Registrar Empréstimo</h3>
+      <button class="modal-close" onclick="closeModal('modal-emp-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field col-full"><label>Espécime *</label>
+          <select id="em-especime"><option value="">— Selecione —</option></select>
+        </div>
+        <div class="field"><label>Instituição Destino *</label><input id="em-inst" /></div>
+        <div class="field"><label>Pesquisador Responsável *</label><input id="em-pesq" /></div>
+        <div class="field"><label>Data de Saída *</label><input type="date" id="em-saida" /></div>
+        <div class="field"><label>Previsão de Retorno</label><input type="date" id="em-retorno" /></div>
+        <div class="field col-full"><label>Finalidade</label><textarea id="em-final" rows="2"></textarea></div>
+        <div class="field col-full"><label>Observações</label><textarea id="em-obs" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-emp-overlay')">Cancelar</button>
+      <button class="btn btn-sm" onclick="saveEmprestimo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Usuário -->
+<div class="overlay" id="modal-usr-overlay" onclick="closeOverlay(event,'modal-usr-overlay')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-usr-title">Novo Usuário</h3>
+      <button class="modal-close" onclick="closeModal('modal-usr-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>Nome *</label><input id="u-nome" /></div>
+        <div class="field"><label>E-mail *</label><input type="email" id="u-email" /></div>
+        <div class="field"><label>Senha *</label><input type="password" id="u-senha" placeholder="Mínimo 8 caracteres" /></div>
+        <div class="field"><label>Perfil</label>
+          <select id="u-perfil">
+            <option value="leitor">Leitor</option>
+            <option value="curador">Curador</option>
+            <option value="administrador">Administrador</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-usr-overlay')">Cancelar</button>
+      <button class="btn btn-sm" onclick="saveUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

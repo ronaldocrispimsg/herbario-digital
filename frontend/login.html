@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BioAcervo — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="login-page">
+  <div id="app">
+    <div class="login-card">
+      <h1>🌿 BioAcervo</h1>
+      <p>Sistema de Gestão do Herbário Digital</p>
+      <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com" autocomplete="username" /></div>
+      <div class="field"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password" /></div>
+      <div id="login-error" style="color:var(--danger);font-size:.82rem;margin-bottom:12px;display:none"></div>
+      <button type="button" class="btn btn-full" id="login-btn" onclick="doLogin()">Entrar</button>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
