@@ -1,18 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-import os
 
-from app.core.config import settings
-from app.api.v1.router import api_router
+from app.config.config import settings
+from app.routes.router import api_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: garantir diretórios
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(settings.EXPORT_DIR, exist_ok=True)
     print("✅ BioAcervo API iniciada")
     yield
     print("🛑 BioAcervo API encerrada")
@@ -51,11 +46,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Servir arquivos persistidos no bucket via /uploads.
-# TODO: avaliar regra de negócio para tornar imagens privadas/autorizadas sem quebrar a galeria atual.
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Registrar rotas
 app.include_router(api_router)

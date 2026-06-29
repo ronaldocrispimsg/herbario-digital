@@ -11,7 +11,7 @@ from app.schemas.schemas import (
     LocalidadeCreate, LocalidadeUpdate, LocalidadeOut,
     PaginatedResponse,
 )
-from app.core.security import get_current_user, require_roles
+from app.config.security import get_current_user, require_roles
 
 # ─── Taxonomia ────────────────────────────────────────────────────────────────
 

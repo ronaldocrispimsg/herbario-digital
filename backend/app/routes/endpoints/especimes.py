@@ -12,7 +12,7 @@ from app.schemas.schemas import (
 from app.services.especime_service import EspecimeService
 from app.services.imagem_service import ImagemService
 from app.services.export_service import ExportService, EtiquetaService
-from app.core.security import get_current_user, require_roles
+from app.config.security import get_current_user, require_roles
 
 router = APIRouter(prefix="/especimes", tags=["Espécimes"])
 

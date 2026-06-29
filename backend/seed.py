@@ -2,24 +2,19 @@
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.core.config import settings
+from app.config.config import settings
 from app.db.session import Base
 from app.models.models import Usuario, PerfilUsuario
-from app.core.security import get_password_hash
+from app.config.security import get_password_hash
 
 
 async def criar_banco():
     engine = create_async_engine(settings.DATABASE_URL, echo=True)
 
-    if settings.CREATE_TABLES_ON_SEED:
-        if settings.is_production:
-            raise RuntimeError("CREATE_TABLES_ON_SEED não deve ser usado em produção; execute Alembic.")
-        async with engine.begin() as conn:
-            print("Criando tabelas para desenvolvimento local...")
-            await conn.run_sync(Base.metadata.create_all)
-            print("✅ Tabelas criadas com sucesso!")
-    else:
-        print("ℹ️  Criação de tabelas via seed desativada; use Alembic para schema.")
+    async with engine.begin() as conn:
+        print("Criando/verificando tabelas do banco...")
+        await conn.run_sync(Base.metadata.create_all)
+        print("✅ Tabelas prontas!")
 
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -56,7 +51,7 @@ async def criar_banco():
             print("ℹ️  Usuário admin já existe")
 
     await engine.dispose()
-    print("\n🚀 Banco de dados pronto! Execute: uvicorn app.main:app --reload")
+    print("\n🚀 Banco de dados pronto! Execute: uvicorn main:app --reload")
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@ import pytest
 from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
-from app.core.security import get_current_user
-from app.main import app
+from app.config.security import get_current_user
+from main import app
 from app.models.models import PerfilUsuario
 from app.schemas.schemas import UsuarioOut
 from app.services.imagem_service import ImagemService

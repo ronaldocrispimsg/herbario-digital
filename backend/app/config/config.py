@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 from typing import List
-import os
 
 
 class Settings(BaseSettings):
@@ -14,14 +13,16 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     ENVIRONMENT: str = "development"
 
-    # Upload
-    UPLOAD_DIR: str = "uploads/images"
+    # Bucket / MinIO
+    MINIO_ENDPOINT: str = "bucket:9000"
+    MINIO_PUBLIC_ENDPOINT: str = "/uploads"
+    MINIO_BUCKET: str = "bioacervo"
+    MINIO_ROOT_USER: str = "bioacervo"
+    MINIO_ROOT_PASSWORD: str = "bioacervo_minio_password"
+    MINIO_SECURE: bool = False
     MAX_IMAGE_SIZE_MB: int = 20
     MAX_IMAGE_PIXELS: int = 50_000_000
     ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/tiff,image/webp"
-
-    # Exportação
-    EXPORT_DIR: str = "uploads/exports"
 
     # Servidor
     APP_HOST: str = "0.0.0.0"
@@ -32,7 +33,6 @@ class Settings(BaseSettings):
     # Seed/desenvolvimento
     ADMIN_EMAIL: str | None = None
     ADMIN_PASSWORD: str | None = None
-    CREATE_TABLES_ON_SEED: bool = False
 
     @property
     def allowed_image_types_list(self) -> List[str]:
@@ -56,7 +56,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-# Garantir que os diretórios existam
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(settings.EXPORT_DIR, exist_ok=True)

@@ -1,14 +1,10 @@
-FROM alpine:3.20
+FROM quay.io/minio/minio
 
 LABEL org.opencontainers.image.title="BioAcervo Bucket"
-LABEL org.opencontainers.image.description="Local persistent file bucket for BioAcervo uploads and exports"
-
-RUN mkdir -p /data/images /data/exports \
-    && chown -R 1000:1000 /data
-
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+LABEL org.opencontainers.image.description="MinIO object storage for BioAcervo uploads and exports"
 
 VOLUME ["/data"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 9000 9001
+
+CMD ["server", "/data", "--console-address", ":9001"]

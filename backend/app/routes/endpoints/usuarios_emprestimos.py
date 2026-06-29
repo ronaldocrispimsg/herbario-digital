@@ -13,7 +13,7 @@ from app.schemas.schemas import (
 )
 from app.services.usuario_service import UsuarioService
 from app.services.especime_service import EspecimeService
-from app.core.security import get_current_user, require_roles
+from app.config.security import get_current_user, require_roles
 
 # ─── Usuários ─────────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ async def listar_emprestimos(
     query = (
         select(Emprestimo)
         .options(selectinload(Emprestimo.especime).selectinload(
-            __import__("app.models.models", fromlist=["Especime"]).Especime.taxonomia
+            __import__("models.models", fromlist=["Especime"]).Especime.taxonomia
         ))
     )
     if apenas_ativos:
