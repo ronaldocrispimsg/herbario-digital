@@ -6,6 +6,7 @@ from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from app.config.security import get_current_user
+from app.routes.endpoints import usuarios_emprestimos as emprestimos_route
 from main import app
 from app.models.models import PerfilUsuario
 from app.schemas.schemas import UsuarioOut
@@ -59,6 +60,111 @@ def test_listar_emprestimos_nao_quebra_com_banco_vazio():
     response = client.get("/api/v1/emprestimos?page=1&per_page=20")
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+def test_auth_endpoints_verificam_erros_basicos():
+    client = _client_for()
+    response = client.get("/api/v1/auth/me")
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "naoexiste@bioacervo.local", "password": "senhaerrada"},
+    )
+    assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1/auth/registrar",
+        json={
+            "nome": "Novo Usuário",
+            "email": "novo@bioacervo.local",
+            "senha": "123456",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_especimes_endpoints_tratam_erros_sem_500():
+    client = _client_for(PerfilUsuario.administrador)
+    assert client.get("/api/v1/especimes").status_code == 200
+    assert client.post("/api/v1/especimes/buscar", json={"page": 1, "per_page": 20}).status_code == 200
+    assert client.get("/api/v1/especimes/999999").status_code == 404
+    assert client.post("/api/v1/especimes", json={}).status_code == 422
+    assert client.put("/api/v1/especimes/999999", json={"observacoes": "teste"}).status_code == 404
+    assert client.delete("/api/v1/especimes/999999").status_code == 404
+
+
+def test_taxonomia_e_localidade_endpoints_tratam_erros():
+    client = _client_for(PerfilUsuario.administrador)
+    assert client.get("/api/v1/taxonomias").status_code == 200
+    assert client.post("/api/v1/taxonomias", json={}).status_code == 422
+    assert client.get("/api/v1/taxonomias/999999").status_code == 404
+    assert client.put("/api/v1/taxonomias/999999", json={"nome_cientifico": "Teste"}).status_code == 404
+    assert client.delete("/api/v1/taxonomias/999999").status_code == 404
+
+    assert client.get("/api/v1/localidades").status_code == 200
+    assert client.post("/api/v1/localidades", json={}).status_code == 422
+    assert client.get("/api/v1/localidades/999999").status_code == 404
+    assert client.put("/api/v1/localidades/999999", json={"pais": "Brasil"}).status_code == 404
+    assert client.delete("/api/v1/localidades/999999").status_code == 404
+
+
+def test_usuarios_e_emprestimos_endpoints_tratam_erros():
+    client = _client_for(PerfilUsuario.administrador)
+    assert client.get("/api/v1/usuarios").status_code == 200
+    assert client.get("/api/v1/usuarios/999999").status_code == 404
+    assert client.post("/api/v1/usuarios", json={}).status_code == 422
+    assert client.put("/api/v1/usuarios/999999", json={"nome": "Teste"}).status_code == 404
+    assert client.delete("/api/v1/usuarios/999999").status_code == 404
+
+    assert client.get("/api/v1/emprestimos").status_code == 200
+    assert client.post("/api/v1/emprestimos", json={}).status_code == 422
+    assert client.post(
+        "/api/v1/emprestimos",
+        json={
+            "especime_id": 999999,
+            "instituicao_destino": "Instituição Teste",
+            "pesquisador_responsavel": "Pesquisador Teste",
+            "data_saida": "2026-06-29T10:00:00",
+        },
+    ).status_code == 404
+    assert client.put("/api/v1/emprestimos/999999", json={"observacoes": "teste"}).status_code == 404
+
+
+def test_criar_emprestimo_retorna_201_quando_especime_esta_associado(monkeypatch):
+    async def fake_get_db():
+        class FakeSession:
+            def add(self, obj):
+                self.added = obj
+
+            async def flush(self):
+                return None
+
+            async def refresh(self, obj, attribute=None):
+                return None
+
+        yield FakeSession()
+
+    async def fake_get_by_id(db, especime_id):
+        return SimpleNamespace(id=especime_id, codigo_catalogo="TEST-1", status="ativo")
+
+    monkeypatch.setattr(emprestimos_route, "get_db", fake_get_db)
+    monkeypatch.setattr(emprestimos_route.EspecimeService, "get_by_id", fake_get_by_id)
+
+    client = _client_for(PerfilUsuario.administrador)
+    response = client.post(
+        "/api/v1/emprestimos",
+        json={
+            "especime_id": 1,
+            "instituicao_destino": "Instituição Teste",
+            "pesquisador_responsavel": "Pesquisador Teste",
+            "data_saida": "2026-06-29T10:00:00",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["especime"]["id"] == 1
 
 
 def test_usuario_out_nao_quebra_com_email_legado_local():

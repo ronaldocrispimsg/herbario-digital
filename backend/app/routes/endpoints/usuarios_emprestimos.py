@@ -137,6 +137,7 @@ async def criar_emprestimo(
 
     # Atualizar status do espécime
     especime.status = "emprestado"
+    emprestimo.especime = especime
     await db.flush()
     await db.refresh(emprestimo)
     return emprestimo
@@ -165,6 +166,12 @@ async def atualizar_emprestimo(
 
     for k, v in update_data.items():
         setattr(emp, k, v)
+
+    if getattr(emp, "especime", None) is None:
+        especime = await EspecimeService.get_by_id(db, emp.especime_id)
+        if especime:
+            emp.especime = especime
+
     await db.flush()
     await db.refresh(emp)
     return emp
