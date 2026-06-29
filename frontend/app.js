@@ -33,8 +33,19 @@ async function api(method, path, body, isForm = false) {
   if (body) opts.body = isForm ? body : JSON.stringify(body);
   const res = await fetch(API_BASE + path, opts);
   if (res.status === 401) { logout(); return null; }
-  const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('json') ? await res.json() : await res.text();
+  if (res.status === 204 || res.status === 205) return null;
+
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('json')) {
+      try { data = JSON.parse(text); } catch { data = text; }
+    } else {
+      data = text;
+    }
+  }
+
   if (!res.ok) throw new Error(formatApiError(data, res.statusText));
   return data;
 }

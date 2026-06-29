@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
-from app.models.models import Emprestimo
+from app.models.models import Emprestimo, Especime
 from app.schemas.schemas import (
     UsuarioCreate, UsuarioOut, UsuarioUpdate, UsuarioSelfUpdate,
     EmprestimoCreate, EmprestimoUpdate, EmprestimoOut,
@@ -107,9 +107,7 @@ async def listar_emprestimos(
 ):
     query = (
         select(Emprestimo)
-        .options(selectinload(Emprestimo.especime).selectinload(
-            __import__("models.models", fromlist=["Especime"]).Especime.taxonomia
-        ))
+        .options(selectinload(Emprestimo.especime).selectinload(Especime.taxonomia))
     )
     if apenas_ativos:
         query = query.where(Emprestimo.ativo == True)

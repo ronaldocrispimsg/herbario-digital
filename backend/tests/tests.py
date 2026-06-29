@@ -54,6 +54,13 @@ def test_leitor_nao_exporta_dwca():
     assert client.get("/api/v1/especimes/exportar/dwca/todos").status_code == 403
 
 
+def test_listar_emprestimos_nao_quebra_com_banco_vazio():
+    client = _client_for(PerfilUsuario.administrador)
+    response = client.get("/api/v1/emprestimos?page=1&per_page=20")
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+
 def test_usuario_out_nao_quebra_com_email_legado_local():
     usuario = SimpleNamespace(
         id=1,
