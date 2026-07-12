@@ -6,6 +6,7 @@ from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from app.config.security import get_current_user
+from app.routes.endpoints import auth as auth_route
 from app.routes.endpoints import usuarios_emprestimos as emprestimos_route
 from main import app
 from app.models.models import PerfilUsuario
@@ -74,15 +75,40 @@ def test_auth_endpoints_verificam_erros_basicos():
     )
     assert response.status_code == 401
 
+
+def test_registrar_pode_ser_usado_sem_administrador(monkeypatch):
+    async def fake_get_db():
+        yield object()
+
+    async def fake_get_by_email(db, email):
+        return None
+
+    async def fake_create(db, data):
+        return SimpleNamespace(
+            id=2,
+            nome=data.nome,
+            email=data.email,
+            perfil=data.perfil,
+            ativo=True,
+            criado_em=datetime.utcnow(),
+        )
+
+    monkeypatch.setattr(auth_route, "get_db", fake_get_db)
+    monkeypatch.setattr(auth_route.UsuarioService, "get_by_email", fake_get_by_email)
+    monkeypatch.setattr(auth_route.UsuarioService, "create", fake_create)
+
+    client = TestClient(app)
     response = client.post(
         "/api/v1/auth/registrar",
         json={
             "nome": "Novo Usuário",
             "email": "novo@bioacervo.local",
-            "senha": "123456",
+            "senha": "Senha123",
         },
     )
-    assert response.status_code == 403
+
+    assert response.status_code == 201
+    assert response.json()["email"] == "novo@bioacervo.local"
 
 
 def test_especimes_endpoints_tratam_erros_sem_500():

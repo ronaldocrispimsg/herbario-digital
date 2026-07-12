@@ -164,6 +164,18 @@ input, select, textarea { font-family: inherit; }
   background: transparent; border: 1px solid var(--border);
   color: var(--text);
 }
+.login-actions {
+  display: flex; justify-content: flex-end; margin-top: 12px;
+}
+.register-form {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+.register-message {
+  font-size: .82rem; margin-bottom: 12px;
+}
+.register-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+}
 .btn-ghost:hover { background: var(--bg3); border-color: var(--border2); }
 .btn-danger { background: var(--danger); }
 .btn-danger:hover { background: #d45030; }

@@ -18,6 +18,34 @@
       <div class="field"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password" /></div>
       <div id="login-error" style="color:var(--danger);font-size:.82rem;margin-bottom:12px;display:none"></div>
       <button type="button" class="btn btn-full" id="login-btn" onclick="doLogin()">Entrar</button>
+
+      <div class="login-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="show-register-btn">Criar conta</button>
+      </div>
+
+      <div id="register-form" class="register-form" style="display:none;">
+        <div class="field">
+          <label>Nome</label>
+          <input type="text" id="register-nome" placeholder="Seu nome" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="register-email" placeholder="seu@email.com" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input type="password" id="register-senha" placeholder="••••••••" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Confirmar senha</label>
+          <input type="password" id="register-confirmar-senha" placeholder="Repita a senha" autocomplete="new-password" />
+        </div>
+        <div id="register-message" class="register-message" style="display:none"></div>
+        <div class="register-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="register-cancel-btn">Voltar</button>
+          <button type="button" class="btn btn-sm" id="register-btn" onclick="doRegister()">Cadastrar</button>
+        </div>
+      </div>
     </div>
   </div>
   <script src="app.js"></script>

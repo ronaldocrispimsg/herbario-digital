@@ -27,15 +27,11 @@ async def login(
 
 
 @router.post("/registrar", response_model=UsuarioOut, status_code=201,
-             summary="Registrar novo usuário (apenas administradores)")
+             summary="Registrar novo usuário")
 async def registrar(
     data: UsuarioCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
-    from app.models.models import PerfilUsuario
-    if current_user.perfil != PerfilUsuario.administrador:
-        raise HTTPException(status_code=403, detail="Apenas administradores podem cadastrar usuários")
     existente = await UsuarioService.get_by_email(db, data.email)
     if existente:
         raise HTTPException(status_code=400, detail="Email já cadastrado")

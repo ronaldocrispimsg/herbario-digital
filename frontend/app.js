@@ -173,6 +173,74 @@ function toast(msg, type = 'success') {
 // ─────────────────────────────────────────────
 //  AUTH
 // ─────────────────────────────────────────────
+function toggleRegisterForm(show = null) {
+  const panel = document.getElementById('register-form');
+  const toggleBtn = document.getElementById('show-register-btn');
+  if (!panel || !toggleBtn) return;
+  const shouldShow = show ?? panel.style.display === 'none';
+  panel.style.display = shouldShow ? 'block' : 'none';
+  toggleBtn.textContent = shouldShow ? 'Voltar ao login' : 'Criar conta';
+}
+
+function setRegisterMessage(message, type = 'error') {
+  const el = document.getElementById('register-message');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.color = type === 'success' ? 'var(--moss)' : 'var(--danger)';
+}
+
+async function doRegister() {
+  const nomeInput = document.getElementById('register-nome');
+  const emailInput = document.getElementById('register-email');
+  const senhaInput = document.getElementById('register-senha');
+  const confirmInput = document.getElementById('register-confirmar-senha');
+  const btn = document.getElementById('register-btn');
+  const nome = nomeInput?.value.trim() || '';
+  const email = emailInput?.value.trim() || '';
+  const senha = senhaInput?.value || '';
+  const confirmarSenha = confirmInput?.value || '';
+
+  setRegisterMessage('');
+
+  if (!nome || !email || !senha || !confirmarSenha) {
+    setRegisterMessage('Preencha todos os campos para criar a conta.');
+    return;
+  }
+  if (senha.length < 8) {
+    setRegisterMessage('A senha deve ter no mínimo 8 caracteres.');
+    return;
+  }
+  if (senha !== confirmarSenha) {
+    setRegisterMessage('As senhas não coincidem.');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await api('POST', '/auth/registrar', { nome, email, senha });
+    setRegisterMessage('Conta criada com sucesso! Você pode entrar agora.', 'success');
+    if (nomeInput) nomeInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (senhaInput) senhaInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+    const loginEmail = document.getElementById('login-email');
+    if (loginEmail) loginEmail.value = email;
+    const loginPass = document.getElementById('login-senha');
+    if (loginPass) loginPass.focus();
+    toggleRegisterForm(false);
+  } catch (e) {
+    setRegisterMessage(e.message || 'Não foi possível criar a conta.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Cadastrar'; }
+  }
+}
+
 async function doLogin() {
   const emailInput = document.getElementById('login-email');
   const passInput  = document.getElementById('login-senha');
@@ -233,6 +301,21 @@ function logout() {
   localStorage.removeItem('ba_user');
   window.location.href = 'login.html';
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const showRegisterBtn = document.getElementById('show-register-btn');
+  if (showRegisterBtn) {
+    showRegisterBtn.addEventListener('click', () => toggleRegisterForm());
+  }
+
+  const cancelRegisterBtn = document.getElementById('register-cancel-btn');
+  if (cancelRegisterBtn) {
+    cancelRegisterBtn.addEventListener('click', () => {
+      toggleRegisterForm(false);
+      setRegisterMessage('');
+    });
+  }
+});
 
 // ─────────────────────────────────────────────
 //  NAVEGAÇÃO
