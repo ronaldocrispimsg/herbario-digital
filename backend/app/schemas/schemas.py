@@ -85,7 +85,7 @@ class UsuarioOut(UsuarioBase):
     id: int
     email: str
     ativo: bool
-    criado_em: datetime
+    criado_em: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -141,8 +141,8 @@ class TaxonomiaUpdate(BaseModel):
 
 class TaxonomiaOut(TaxonomiaBase):
     id: int
-    criado_em: datetime
-    atualizado_em: datetime
+    criado_em: Optional[datetime] = None
+    atualizado_em: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -158,7 +158,7 @@ class LocalidadeBase(BaseModel):
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     altitude_m: Optional[float] = None
-    datum_geodesico: str = "WGS84"
+    datum_geodesico: Optional[str] = "WGS84"
     precisao_coordenadas_m: Optional[float] = None
     metodo_geolocalizacao: Optional[str] = None
     bioma: Optional[str] = None
@@ -184,10 +184,11 @@ class LocalidadeUpdate(BaseModel):
 
 class LocalidadeOut(LocalidadeBase):
     id: int
-    criado_em: datetime
+    criado_em: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
 
 
 # ─── Imagem ───────────────────────────────────────────────────────────────────
@@ -196,14 +197,14 @@ class ImagemOut(BaseModel):
     id: int
     especime_id: int
     nome_arquivo: str
-    url_relativa: Optional[str]
-    tipo_mime: Optional[str]
-    tamanho_bytes: Optional[int]
-    largura_px: Optional[int]
-    altura_px: Optional[int]
-    descricao: Optional[str]
-    is_principal: bool
-    criado_em: datetime
+    url_relativa: Optional[str] = None
+    tipo_mime: Optional[str] = None
+    tamanho_bytes: Optional[int] = None
+    largura_px: Optional[int] = None
+    altura_px: Optional[int] = None
+    descricao: Optional[str] = None
+    is_principal: bool = False
+    criado_em: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -224,7 +225,7 @@ class EspecimeBase(BaseModel):
     sexo: Optional[str] = None
     estagio_vida: Optional[str] = None
     condicao: Optional[str] = None
-    numero_individuos: int = 1
+    numero_individuos: Optional[int] = 1
     descricao_morfologica: Optional[str] = None
     observacoes: Optional[str] = None
     habitat: Optional[str] = None
@@ -238,7 +239,7 @@ class EspecimeBase(BaseModel):
     meio_preservacao: Optional[str] = None
     dwc_dataset_id: Optional[str] = None
     referencias_bibliograficas: Optional[List[str]] = []
-    direitos: str = "CC BY 4.0"
+    direitos: Optional[str] = "CC BY 4.0"
     licenca: Optional[str] = None
 
 
@@ -279,12 +280,12 @@ class EspecimeUpdate(BaseModel):
 
 class EspecimeOut(EspecimeBase):
     id: int
-    codigo_barras: Optional[str]
-    dwc_record_id: Optional[str]
-    data_entrada_colecao: datetime
-    cadastrado_por_id: Optional[int]
-    criado_em: datetime
-    atualizado_em: datetime
+    codigo_barras: Optional[str] = None
+    dwc_record_id: Optional[str] = None
+    data_entrada_colecao: Optional[datetime] = None
+    cadastrado_por_id: Optional[int] = None
+    criado_em: Optional[datetime] = None
+    atualizado_em: Optional[datetime] = None
     taxonomia: Optional[TaxonomiaOut] = None
     localidade: Optional[LocalidadeOut] = None
     imagens: Optional[List[ImagemOut]] = []
@@ -319,13 +320,14 @@ class EmprestimoUpdate(BaseModel):
 class EmprestimoOut(EmprestimoBase):
     id: int
     responsavel_id: int
-    data_retorno: Optional[datetime]
+    data_retorno: Optional[datetime] = None
     ativo: bool
-    criado_em: datetime
+    criado_em: Optional[datetime] = None
     especime: Optional[EspecimeOut] = None
 
     class Config:
         from_attributes = True
+
 
 
 # ─── Busca ────────────────────────────────────────────────────────────────────

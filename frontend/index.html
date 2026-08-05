@@ -20,6 +20,7 @@
       <button class="nav-btn" data-screen="taxonomias">Taxonomias</button>
       <button class="nav-btn" data-screen="localidades">Localidades</button>
       <button class="nav-btn" data-screen="emprestimos">Empréstimos</button>
+      <button class="nav-btn write-action" data-screen="importacao" id="nav-importacao" style="display:none">Importação</button>
       <button class="nav-btn" data-screen="usuarios" id="nav-usuarios" style="display:none">Usuários</button>
     </nav>
     <div id="topbar-right" style="display:none">
@@ -66,7 +67,10 @@
     <div id="screen-especimes" class="screen">
       <div class="page-header">
         <div><h2>Espécimes</h2><p>Catálogo do acervo biológico</p></div>
-        <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost write-action" id="btn-importar-especimes" onclick="openModalImport()" style="display:none">📂 Importar Planilha</button>
+          <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
+        </div>
       </div>
       <div class="search-bar">
         <div class="search-input-wrap">
@@ -182,6 +186,22 @@
           </thead>
           <tbody id="tbody-usuarios"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ── IMPORTACAO ── -->
+    <div id="screen-importacao" class="screen">
+      <div class="page-header">
+        <div><h2>Importação de Planilhas</h2><p>Ingestão de acervos via arquivos .xlsx e .csv</p></div>
+        <button class="btn btn-sm write-action" onclick="openModalImport()">📂 Nova Importação</button>
+      </div>
+      <div class="stat-card" style="margin-bottom:20px;padding:24px;background:var(--bg3);border:1px dashed var(--border2)">
+        <h3 style="font-family:var(--font-serif);color:var(--leaf);margin-bottom:8px">Como funciona a importação?</h3>
+        <p style="color:var(--muted);font-size:.9rem;line-height:1.5">
+          1. Envie uma planilha no formato Excel (.xlsx) ou CSV (.csv).<br/>
+          2. O sistema executará uma <strong>validação prévia (Dry-Run)</strong> e detectará taxonomias, localidades e códigos.<br/>
+          3. Você poderá revisar os registros e confirmar a gravação direta no banco de dados.
+        </p>
       </div>
     </div>
   </div><!-- /main -->
@@ -400,6 +420,75 @@
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-usr-overlay')">Cancelar</button>
       <button class="btn btn-sm" onclick="saveUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Importação -->
+<div class="overlay" id="modal-import-overlay" onclick="closeOverlay(event,'modal-import-overlay')">
+  <div class="modal" style="width:min(900px, 95vw)">
+    <div class="modal-header">
+      <h3 id="modal-import-title">Importar Planilha do Acervo</h3>
+      <button class="modal-close" onclick="closeModal('modal-import-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Passo 1: Upload Dropzone -->
+      <div id="import-step-upload">
+        <div class="drop-zone" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()">
+          <span style="font-size:2.5rem;margin-bottom:8px">📄</span>
+          <p style="font-weight:500;color:var(--text)">Arraste e solte sua planilha aqui ou <span style="color:var(--moss);text-decoration:underline">clique para selecionar</span></p>
+          <span style="font-size:.8rem;color:var(--muted);margin-top:4px">Suporta arquivos .xlsx e .csv</span>
+          <input type="file" id="import-file-input" accept=".xlsx,.csv" style="display:none" onchange="handleImportFileSelect(event)" />
+        </div>
+        <div id="import-upload-loading" style="display:none;text-align:center;padding:24px;">
+          <div class="loader" style="margin:0 auto 12px auto"></div>
+          <p style="color:var(--muted)">Analisando e validando planilha (Dry-Run)…</p>
+        </div>
+      </div>
+
+      <!-- Passo 2: Preview / Dry-Run -->
+      <div id="import-step-preview" style="display:none">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-bottom: 16px;">
+          <div class="stat-card"><div class="label">Linhas lidas</div><div class="value" id="imp-stat-total">0</div></div>
+          <div class="stat-card"><div class="label">Válidas</div><div class="value" id="imp-stat-valid" style="color:var(--leaf)">0</div></div>
+          <div class="stat-card"><div class="label">Alertas</div><div class="value" id="imp-stat-warn" style="color:var(--warn)">0</div></div>
+          <div class="stat-card"><div class="label">Novas Taxonomias</div><div class="value" id="imp-stat-tax">0</div></div>
+          <div class="stat-card"><div class="label">Novas Localidades</div><div class="value" id="imp-stat-loc">0</div></div>
+        </div>
+
+        <h4 style="margin-bottom: 8px; font-size: .95rem; color: var(--text)">Pré-visualização dos Dados</h4>
+        <div class="table-wrap" style="max-height: 320px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Linha</th>
+                <th>Código</th>
+                <th>Nome Científico</th>
+                <th>Família</th>
+                <th>Localidade</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="import-tbody-preview"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Passo 3: Resultado / Relatório Final -->
+      <div id="import-step-result" style="display:none">
+        <div class="stat-card" style="background:var(--bg3);padding:20px;margin-bottom:16px;text-align:center;">
+          <span style="font-size:2.5rem">🎉</span>
+          <h3 style="color:var(--leaf);margin-top:8px">Importação Concluída!</h3>
+          <p id="import-result-summary" style="color:var(--muted);font-size:.9rem;margin-top:4px"></p>
+        </div>
+        <div id="import-result-errors" style="display:none;background:rgba(192,72,42,.08);border:1px solid var(--danger);padding:12px;border-radius:var(--radius);font-size:.85rem;color:var(--danger);"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-import-overlay')">Cancelar</button>
+      <button class="btn btn-sm" id="btn-confirm-import" style="display:none" onclick="confirmImport()">Confirmar e Importar</button>
+      <button class="btn btn-sm" id="btn-finish-import" style="display:none" onclick="finishImport()">Concluir</button>
     </div>
   </div>
 </div>

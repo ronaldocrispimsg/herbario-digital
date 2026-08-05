@@ -13,8 +13,31 @@ from app.schemas.schemas import (
 )
 from app.core.security import get_current_user, require_roles
 
-# ─── Taxonomia ────────────────────────────────────────────────────────────────
 
+def _safe_taxonomia_out(obj) -> TaxonomiaOut:
+    data = {
+        "id": getattr(obj, "id", 0),
+        "nome_cientifico": getattr(obj, "nome_cientifico", None) or "(sem nome)",
+        "familia": getattr(obj, "familia", None),
+        "genero": getattr(obj, "genero", None),
+        "reino": getattr(obj, "reino", None),
+        "classe": getattr(obj, "classe", None),
+        "ordem": getattr(obj, "ordem", None),
+        "autor_descricao": getattr(obj, "autor_descricao", None),
+        "ano_descricao": getattr(obj, "ano_descricao", None),
+        "nome_comum": getattr(obj, "nome_comum", None),
+        "sinonimos": getattr(obj, "sinonimos", None),
+        "notas_taxonomicas": getattr(obj, "notas_taxonomicas", None),
+        "criado_em": getattr(obj, "criado_em", None),
+        "atualizado_em": getattr(obj, "atualizado_em", None),
+    }
+    try:
+        return TaxonomiaOut(**data)
+    except Exception:
+        return TaxonomiaOut(id=data.get("id") or 0, nome_cientifico="(inválido)", familia=data.get("familia"), genero=data.get("genero"), reino=data.get("reino"), classe=data.get("classe"), ordem=data.get("ordem"), autor_descricao=data.get("autor_descricao"), ano_descricao=data.get("ano_descricao"), nome_comum=data.get("nome_comum"), sinonimos=data.get("sinonimos"), notas_taxonomicas=data.get("notas_taxonomicas"), criado_em=data.get("criado_em"), atualizado_em=data.get("atualizado_em"))
+
+
+# ─── Taxonomia ────────────────────────────────────────────────────────────────
 taxonomia_router = APIRouter(prefix="/taxonomias", tags=["Taxonomia"])
 
 

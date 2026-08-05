@@ -18,3 +18,16 @@ bucket/data/images/**
 !bucket/data/exports/
 bucket/data/exports/**
 !bucket/data/exports/.gitkeep
+.trash/
+renders/.build/
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.xlsx
+
+.DS_STORE

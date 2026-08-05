@@ -32,6 +32,7 @@ services:
         condition: service_healthy
     volumes:
       - ./bucket/data:/bucket
+      - ./backend/app:/app/app
     ports:
       - "${BACKEND_PORT}:8000"
     healthcheck:
@@ -62,5 +63,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - ./frontend:/usr/share/nginx/html
     ports:
       - "${FRONTEND_PORT}:80"
+
