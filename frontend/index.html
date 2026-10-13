@@ -14,19 +14,28 @@
 <div id="app">
   <header id="topbar">
     <div class="logo"><span class="logo-icon">🌿</span> BioAcervo</div>
-    <nav id="nav" style="display:none">
+    <nav id="nav">
       <button class="nav-btn active" data-screen="dashboard">Dashboard</button>
       <button class="nav-btn" data-screen="especimes">Espécimes</button>
       <button class="nav-btn" data-screen="taxonomias">Taxonomias</button>
       <button class="nav-btn" data-screen="localidades">Localidades</button>
-      <button class="nav-btn" data-screen="emprestimos">Empréstimos</button>
+      <button class="nav-btn" data-screen="emprestimos" id="nav-emprestimos" style="display:none">Empréstimos</button>
       <button class="nav-btn admin-action" data-screen="importacao" id="nav-importacao" style="display:none">Importação</button>
       <button class="nav-btn" data-screen="usuarios" id="nav-usuarios" style="display:none">Usuários</button>
     </nav>
-    <div id="topbar-right" style="display:none">
-      <div class="badge-user" id="user-badge">
+    <div id="topbar-right">
+      <div id="guest-actions" style="display:flex;align-items:center;gap:10px;">
+        <span class="badge-public" style="font-size:0.78rem;font-weight:500;color:var(--leaf);background:rgba(79,162,99,0.12);padding:4px 10px;border-radius:20px;border:1px solid rgba(79,162,99,0.25);">
+          🌐 Consulta Pública
+        </span>
+        <a href="login.html" class="btn btn-sm btn-ghost" id="btn-login-topbar" style="display:inline-flex;align-items:center;gap:6px;">
+          <span>🔑</span> Entrar / Curadoria
+        </a>
+      </div>
+      <div class="badge-user" id="user-badge" style="display:none">
         <span>🌱</span>
         <span>Olá, <strong id="user-name-badge">—</strong></span>
+        <span id="user-role-badge" style="font-size:0.75rem;padding:2px 6px;border-radius:4px;background:rgba(79,162,99,.15);color:var(--leaf);font-weight:600;text-transform:capitalize;">—</span>
         <span style="color:var(--border2)">|</span>
         <button onclick="logout()" style="background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;">Sair</button>
       </div>
@@ -49,7 +58,7 @@
         <div class="stat-card"><div class="label">Emprestados</div><div class="value" id="stat-emprestados" style="color:#d4a83c">—</div></div>
         <div class="stat-card"><div class="label">Taxonomias</div><div class="value" id="stat-taxonomias">—</div></div>
         <div class="stat-card"><div class="label">Localidades</div><div class="value" id="stat-localidades">—</div></div>
-        <div class="stat-card"><div class="label">Usuários</div><div class="value" id="stat-usuarios">—</div></div>
+        <div class="stat-card" id="card-stat-usuarios" style="display:none"><div class="label">Usuários</div><div class="value" id="stat-usuarios">—</div></div>
       </div>
       <div class="charts-grid" id="charts-area">
         <div class="chart-card">
@@ -411,7 +420,10 @@
       <button class="modal-close" onclick="closeModal('modal-detalhe-overlay')">✕</button>
     </div>
     <div class="modal-body" id="modal-detalhe-body"></div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+      <button class="btn btn-sm btn-ghost" id="btn-download-etiqueta" onclick="downloadEtiqueta()" style="display:inline-flex;align-items:center;gap:6px;">
+        📄 Baixar Etiqueta (PDF)
+      </button>
       <button class="btn btn-sm btn-ghost" onclick="closeModal('modal-detalhe-overlay')">Fechar</button>
     </div>
   </div>

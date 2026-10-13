@@ -2,7 +2,7 @@ import io
 import re
 import csv
 import datetime as dt
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import openpyxl
@@ -40,6 +40,104 @@ def _parse_date(value: object) -> Optional[dt.date]:
         except ValueError:
             pass
     return None
+
+
+def _parse_geo_location(text: Optional[str]) -> Dict[str, Any]:
+    if not text:
+        return {}
+    t = text.strip()
+    lat, lon, alt = None, None, None
+    muni, uf = None, None
+    metodo = None
+
+    # UF
+    if re.search(r"\bMG\b|Minas", t, re.I):
+        uf = "MG"
+    elif re.search(r"\bBA\b|Bahia", t, re.I):
+        uf = "BA"
+    elif re.search(r"\bSP\b|São Paulo", t, re.I):
+        uf = "SP"
+    elif re.search(r"\bGO\b|Goiás", t, re.I):
+        uf = "GO"
+    elif re.search(r"\bDF\b|Brasília|Brasilia", t, re.I):
+        uf = "DF"
+
+    # Municípios conhecidos da região de coleta do Norte de Minas / Bacia do São Francisco
+    municipios = [
+        "Januária", "Januaria", "Bonito de Minas", "Cônego Marinho", "Conego Marinho",
+        "Juvenília", "Juvenilha", "Itacarambi", "Pedras de Maria da Cruz", "São Francisco",
+        "Lontra", "Patis", "Montes Claros", "Varzelândia", "Manga", "Matias Cardoso",
+        "Miravânia", "Montalvânia", "Jaíba", "Jaiba", "Ubaí", "Ubai", "São João das Missões",
+        "Brasília de Minas", "Pintópolis", "Chapada Gaúcha", "Belo Horizonte"
+    ]
+    for m in municipios:
+        if re.search(r"\b" + re.escape(m) + r"\b", t, re.I):
+            muni = (
+                m.replace("Januaria", "Januária")
+                .replace("Conego Marinho", "Cônego Marinho")
+                .replace("Juvenilha", "Juvenília")
+                .replace("Jaiba", "Jaíba")
+                .replace("Ubai", "Ubaí")
+            )
+            if not uf:
+                uf = "MG"
+            break
+
+    # Pontos notórios de Januária sem o nome explícito da cidade
+    if not muni and re.search(r"IFNMG|Brejo do amparo|Vila Paula|Vila Jadete|Riacho da Cruz|Campus Januária|Tejuco|Vila do Brejo", t, re.I):
+        muni = "Januária"
+        uf = "MG"
+
+    # Altitude: ex 535m
+    m_alt = re.search(r"(\d{2,4})\s*m\b", t, re.I)
+    if m_alt:
+        try:
+            alt = float(m_alt.group(1))
+        except ValueError:
+            pass
+
+    # Coordenadas em Graus Decimais (ex: -15.48185, -44.35202 ou -15,48185 -44,35202)
+    clean_t = t.replace(",", ".")
+    m_dec = re.search(r"(-?1[4-6]\.\d+)[^\d\-]+(-?4[3-5]\.\d+)", clean_t)
+    if m_dec:
+        try:
+            lat = float(m_dec.group(1))
+            lon = float(m_dec.group(2))
+            if lat > 0:
+                lat = -lat
+            if lon > 0:
+                lon = -lon
+            metodo = "GPS de Campo (Decimal)"
+        except ValueError:
+            pass
+
+    # Coordenadas em Graus, Minutos e Segundos (DMS) (ex: -15º 28' 01.6" S -44º 22' 13.7" W)
+    if not lat:
+        m_dms = re.search(
+            r"(\d{1,2})[º°\s]+(\d{1,2})['’`\s]+(\d{1,2}(?:\.\d+)?)['’`\"”\s]*[Ss]?[^\d\-]+(\d{1,2})[º°\s]+(\d{1,2})['’`\s]+(\d{1,2}(?:\.\d+)?)['’`\"”\s]*[WwOo]?",
+            t
+        )
+        if m_dms:
+            try:
+                d1, m1, s1, d2, m2, s2 = [float(x) for x in m_dms.groups()]
+                lat = -(d1 + m1 / 60.0 + s1 / 3600.0)
+                lon = -(d2 + m2 / 60.0 + s2 / 3600.0)
+                metodo = "GPS de Campo (DMS)"
+            except ValueError:
+                pass
+
+    # Bioma regional predominante (Norte de Minas Gerais / Cerrado e Caatinga)
+    bioma = "Cerrado" if uf == "MG" else None
+
+    return {
+        "latitude": lat,
+        "longitude": lon,
+        "altitude_m": alt,
+        "municipio": muni,
+        "estado": uf,
+        "bioma": bioma,
+        "metodo_geolocalizacao": metodo,
+    }
 
 
 def _detect_and_map_headers(header_tuple: tuple) -> Dict[int, str]:
@@ -122,6 +220,8 @@ class ImportService:
                     if any(token in joined for token in ["CÓDIGO", "CODIGO", "NOME CIENTIFICO", "FAMILIA"]):
                         headers = _detect_and_map_headers(str_row)
                         continue
+                    if "ORGANIZAÇÃO" in joined or "ORGANIZACAO" in joined:
+                        continue
                     if headers is None:
                         continue
                     raw_rows.append((row_idx, sheet_name, row_values, headers))
@@ -145,6 +245,9 @@ class ImportService:
                 return None
 
             codigo = get_val("codigo") or f"HERB-AUTO-{idx:04d}"
+            if "ORGANIZAÇÃO" in codigo.upper() or "ORGANIZACAO" in codigo.upper():
+                continue
+
             nome_cientifico = get_val("nome_cientifico") or get_val("especie") or get_val("genero") or "Escipie não identificada"
             nome_popular = get_val("nome_popular")
             filo = get_val("filo")
@@ -221,7 +324,7 @@ class ImportService:
 
         tax_res = await db.execute(select(Taxonomia))
         all_tax = tax_res.scalars().all()
-        tax_cache: Dict[str, int] = {t.nome_cientifico.lower(): t.id for t in all_tax}
+        tax_cache: Dict[str, int] = {t.nome_cientifico.strip().lower(): t.id for t in all_tax if t.nome_cientifico}
 
         loc_res = await db.execute(select(LocalidadeGeografica))
         all_loc = loc_res.scalars().all()
@@ -231,83 +334,117 @@ class ImportService:
             if key:
                 loc_cache[key] = l.id
 
+        esp_res = await db.execute(select(Especime))
+        all_esp = esp_res.scalars().all()
+        esp_cache: Dict[str, Especime] = {
+            e.codigo_catalogo.strip(): e for e in all_esp if e.codigo_catalogo
+        }
+
         for r in rows:
+            code_key = (r.codigo or "").strip()
+            if not code_key or "ORGANIZAÇÃO" in code_key.upper() or "ORGANIZACAO" in code_key.upper():
+                continue
+
             try:
-                # 1. Process Taxonomia
-                tax_name = r.nome_cientifico.strip() if r.nome_cientifico else "Não identificada"
-                tax_key = tax_name.lower()
+                async with db.begin_nested():
+                    # 1. Process Taxonomia
+                    tax_name = r.nome_cientifico.strip() if r.nome_cientifico else "Não identificada"
+                    tax_key = tax_name.lower()
 
-                tax_id = tax_cache.get(tax_key)
-                if not tax_id:
-                    new_tax = Taxonomia(
-                        nome_cientifico=tax_name,
-                        familia=r.familia,
-                        genero=r.genero or (tax_name.split()[0] if " " in tax_name else tax_name),
-                        epiteto_especifico=r.especie,
-                        nome_comum=r.nome_popular,
-                        filo=r.filo,
-                        classe=r.classe,
-                        ordem=r.ordem,
-                    )
-                    db.add(new_tax)
-                    await db.flush()
-                    tax_id = new_tax.id
-                    tax_cache[tax_key] = tax_id
-                    taxonomias_criadas += 1
-
-                # 2. Process Localidade
-                loc_id = None
-                if r.localizacao:
-                    loc_key = r.localizacao.strip().lower()
-                    loc_id = loc_cache.get(loc_key)
-                    if not loc_id:
-                        new_loc = LocalidadeGeografica(
-                            pais="Brasil",
-                            localidade=r.localizacao,
-                            datum_geodesico="WGS84",
-                            criado_em=dt.datetime.utcnow(),
+                    tax_id = tax_cache.get(tax_key)
+                    new_tax_created = False
+                    if not tax_id:
+                        new_tax = Taxonomia(
+                            nome_cientifico=tax_name,
+                            familia=r.familia,
+                            genero=r.genero or (tax_name.split()[0] if " " in tax_name else tax_name),
+                            epiteto_especifico=r.especie,
+                            nome_comum=r.nome_popular,
+                            filo=r.filo,
+                            classe=r.classe,
+                            ordem=r.ordem,
                         )
-                        db.add(new_loc)
+                        db.add(new_tax)
                         await db.flush()
-                        loc_id = new_loc.id
-                        loc_cache[loc_key] = loc_id
+                        tax_id = new_tax.id
+                        tax_cache[tax_key] = tax_id
+                        new_tax_created = True
+
+                    # 2. Process Localidade
+                    loc_id = None
+                    new_loc_created = False
+                    if r.localizacao:
+                        loc_key = r.localizacao.strip().lower()
+                        loc_id = loc_cache.get(loc_key)
+                        if not loc_id:
+                            geo_info = _parse_geo_location(r.localizacao)
+                            new_loc = LocalidadeGeografica(
+                                pais="Brasil",
+                                estado=geo_info.get("estado"),
+                                municipio=geo_info.get("municipio"),
+                                localidade=r.localizacao,
+                                latitude=geo_info.get("latitude"),
+                                longitude=geo_info.get("longitude"),
+                                altitude_m=geo_info.get("altitude_m"),
+                                bioma=geo_info.get("bioma"),
+                                metodo_geolocalizacao=geo_info.get("metodo_geolocalizacao"),
+                                datum_geodesico="WGS84",
+                                criado_em=dt.datetime.utcnow(),
+                            )
+                            db.add(new_loc)
+                            await db.flush()
+                            loc_id = new_loc.id
+                            loc_cache[loc_key] = loc_id
+                            new_loc_created = True
+
+                    # 3. Upsert Especime
+                    esp = esp_cache.get(code_key)
+
+                    parsed_dt = None
+                    if r.data_coleta:
+                        try:
+                            parsed_dt = dt.datetime.fromisoformat(r.data_coleta)
+                        except ValueError:
+                            pass
+
+                    obs_origem = f"Origem: {r.origem}" if r.origem else None
+
+                    if esp:
+                        esp.taxonomia_id = tax_id
+                        if loc_id:
+                            esp.localidade_id = loc_id
+                        if r.coletor:
+                            esp.coletor_principal = r.coletor
+                        if parsed_dt:
+                            esp.data_coleta = parsed_dt
+                        if obs_origem and not esp.observacoes:
+                            esp.observacoes = obs_origem
+                        especimes_atualizados += 1
+                    else:
+                        esp = Especime(
+                            codigo_catalogo=code_key,
+                            taxonomia_id=tax_id,
+                            localidade_id=loc_id,
+                            coletor_principal=r.coletor,
+                            data_coleta=parsed_dt,
+                            observacoes=obs_origem,
+                            status=StatusEspecime.ativo,
+                            tipo_coleta=TipoColeta.campo,
+                            numero_individuos=1,
+                            direitos="CC BY 4.0",
+                            cadastrado_por_id=user_id,
+                            data_entrada_colecao=dt.datetime.utcnow(),
+                        )
+                        db.add(esp)
+                        esp_cache[code_key] = esp
+                        especimes_criados += 1
+
+                    await db.flush()
+
+                    if new_tax_created:
+                        taxonomias_criadas += 1
+                    if new_loc_created:
                         localidades_criadas += 1
-
-                # 3. Upsert Especime
-                esp_res = await db.execute(select(Especime).where(Especime.codigo_catalogo == r.codigo))
-                esp = esp_res.scalar_one_or_none()
-
-                parsed_dt = None
-                if r.data_coleta:
-                    try:
-                        parsed_dt = dt.datetime.fromisoformat(r.data_coleta)
-                    except ValueError:
-                        pass
-
-                if esp:
-                    esp.taxonomia_id = tax_id
-                    if loc_id:
-                        esp.localidade_id = loc_id
-                    if r.coletor:
-                        esp.coletor_principal = r.coletor
-                    if parsed_dt:
-                        esp.data_coleta = parsed_dt
-                    especimes_atualizados += 1
-                else:
-                    esp = Especime(
-                        codigo_catalogo=r.codigo,
-                        taxonomia_id=tax_id,
-                        localidade_id=loc_id,
-                        coletor_principal=r.coletor,
-                        data_coleta=parsed_dt,
-                        status=StatusEspecime.ativo,
-                        tipo_coleta=TipoColeta.campo,
-                        numero_individuos=1,
-                        direitos="CC BY 4.0",
-                        data_entrada_colecao=dt.datetime.utcnow(),
-                    )
-                    db.add(esp)
-                    especimes_criados += 1
 
             except Exception as exc:
                 erros += 1

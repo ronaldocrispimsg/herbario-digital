@@ -140,8 +140,13 @@ async def criar_emprestimo(
     # Atualizar status do espécime
     especime.status = "emprestado"
     await db.flush()
-    await db.refresh(emprestimo)
-    return emprestimo
+    from app.models.models import Especime
+    res = await db.execute(
+        select(Emprestimo)
+        .options(selectinload(Emprestimo.especime).selectinload(Especime.taxonomia))
+        .where(Emprestimo.id == emprestimo.id)
+    )
+    return res.scalar_one()
 
 
 @emprestimo_router.put("/{eid}", response_model=EmprestimoOut)
@@ -168,5 +173,10 @@ async def atualizar_emprestimo(
     for k, v in update_data.items():
         setattr(emp, k, v)
     await db.flush()
-    await db.refresh(emp)
-    return emp
+    from app.models.models import Especime
+    res = await db.execute(
+        select(Emprestimo)
+        .options(selectinload(Emprestimo.especime).selectinload(Especime.taxonomia))
+        .where(Emprestimo.id == emp.id)
+    )
+    return res.scalar_one()

@@ -7,4 +7,4 @@ if [ -f "alembic.ini" ]; then
 fi
 python seed.py
 
-exec uvicorn main:app --host "${APP_HOST:-0.0.0.0}" --port "${APP_PORT:-8000}"
+exec uvicorn main:app --host "${APP_HOST:-0.0.0.0}" --port "${APP_PORT:-8000}" --reload

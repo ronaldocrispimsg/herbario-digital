@@ -189,6 +189,12 @@ def _coerce(row: tuple, headers: dict[int, str]) -> RawRow | None:
                 return _clean_name(str(value))
         return None
 
+    def get_raw(field_name: str) -> object:
+        for idx, mapped in headers.items():
+            if mapped == field_name:
+                return row[idx] if idx < len(row) else None
+        return None
+
     codigo = get("codigo")
     nome_cientifico = get("nome_cientifico")
     if not codigo and not nome_cientifico:
@@ -207,7 +213,7 @@ def _coerce(row: tuple, headers: dict[int, str]) -> RawRow | None:
         genero=get("genero"),
         especie=get("especie"),
         localizacao=get("localizacao"),
-        data_coleta_raw=None,
+        data_coleta_raw=get_raw("data_coleta"),
         origem=get("origem"),
         coletor=get("coletor"),
     )
@@ -230,6 +236,8 @@ def parse_xlsx(path: Path) -> tuple[list[RawRow], dict[str, int]]:
             joined = " ".join(text_row).upper()
             if any(token in joined for token in ["CÓDIGO", "CODIGO", "CÓDIGO "]):
                 headers = _detect_and_map_headers(text_row)
+                continue
+            if "ORGANIZAÇÃO" in joined or "ORGANIZACAO" in joined:
                 continue
             if headers is None:
                 continue
@@ -306,14 +314,14 @@ def normalize_rows(rows: Iterable[RawRow]) -> list[ImportedRow]:
         origem = _clean_name(r.origem)
         if not nome_cientifico and not localizacao and not coletor:
             continue
-        composite = "|".join(x or "" for x in [code, nome_cientifico or "", (r.familia or "").strip(), (r.data_coleta_raw or "").strip()])
+        composite = "|".join(str(x or "").strip() for x in [code, nome_cientifico or "", r.familia or "", r.data_coleta_raw or ""])
         if composite in seen_composite:
             continue
         seen_composite.add(composite)
         if code in {"desconhecido", "desconhecida"}:
             code = f"ROW-{r.row_index}"
-        if code in seen_codes and not nome_cientifico:
-            continue
+        if code in seen_codes:
+            code = f"{code}-DUP{r.row_index}"
         seen_codes.add(code)
         parsed_date = _parse_date(r.data_coleta_raw)
         data_coleta_str = parsed_date.isoformat() if parsed_date else None
@@ -342,6 +350,7 @@ def normalize_rows(rows: Iterable[RawRow]) -> list[ImportedRow]:
 # ── Relatórios/exportação para revisão ──────────────────────────────────────
 
 def export_report(rows: list[ImportedRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "total": len(rows),
@@ -353,6 +362,7 @@ def export_report(rows: list[ImportedRow], path: Path) -> None:
 
 
 def export_csv(rows: list[ImportedRow], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "sheet", "row_index", "codigo", "nome_cientifico", "nome_popular", "filo", "classe", "ordem", "familia",
         "genero", "especie", "localizacao", "data_coleta", "origem", "coletor", "taxonomia_id", "localidade_id",
@@ -447,12 +457,58 @@ class HerbarioAPI:
     async def fetch_localidades(self) -> list[dict]:
         return await self._paginated_get("/api/v1/localidades")
 
-    async def create_taxonomia(self, body: dict) -> dict:
+    async def get_or_create_taxonomia(self, body: dict) -> dict:
         if self.dry_run:
             return {"id": 0, **body}
-        r = await self._post("/api/v1/taxonomias", json=body)
-        r.raise_for_status()
-        return r.json()
+        if not hasattr(self, "_tax_cache"):
+            self._tax_cache = {}
+        key = (body.get("nome_cientifico") or "").strip().lower()
+        if key in self._tax_cache:
+            return {"id": self._tax_cache[key], **body}
+        try:
+            r = await self._post("/api/v1/taxonomias", json=body)
+            r.raise_for_status()
+            res = r.json()
+            self._tax_cache[key] = res.get("id")
+            return res
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 409:
+                all_t = await self.fetch_taxonomias()
+                for t in all_t:
+                    t_name = (t.get("nome_cientifico") or "").strip().lower()
+                    if t_name:
+                        self._tax_cache[t_name] = t.get("id")
+                if key in self._tax_cache:
+                    return {"id": self._tax_cache[key], **body}
+            raise
+
+    async def get_or_create_localidade(self, body: dict) -> dict:
+        if self.dry_run:
+            return {"id": 0, **body}
+        if not hasattr(self, "_loc_cache"):
+            self._loc_cache = {}
+        key = (body.get("localidade") or "").strip().lower()
+        if key in self._loc_cache:
+            return {"id": self._loc_cache[key], **body}
+        try:
+            r = await self._post("/api/v1/localidades", json=body)
+            r.raise_for_status()
+            res = r.json()
+            self._loc_cache[key] = res.get("id")
+            return res
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 409:
+                all_l = await self.fetch_localidades()
+                for l in all_l:
+                    l_name = (l.get("localidade") or "").strip().lower()
+                    if l_name:
+                        self._loc_cache[l_name] = l.get("id")
+                if key in self._loc_cache:
+                    return {"id": self._loc_cache[key], **body}
+            raise
+
+    async def create_taxonomia(self, body: dict) -> dict:
+        return await self.get_or_create_taxonomia(body)
 
     async def create_especime(self, body: dict) -> dict:
         if self.dry_run:
@@ -462,11 +518,7 @@ class HerbarioAPI:
         return r.json()
 
     async def create_localidade(self, body: dict) -> dict:
-        if self.dry_run:
-            return {"id": 0, **body}
-        r = await self._post("/api/v1/localidades", json=body)
-        r.raise_for_status()
-        return r.json()
+        return await self.get_or_create_localidade(body)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -474,12 +526,103 @@ class HerbarioAPI:
 
 # ── Caso de importação por item ─────────────────────────────────────────────
 
+def _parse_geo_location(text: str | None) -> dict:
+    if not text:
+        return {}
+    t = text.strip()
+    lat, lon, alt = None, None, None
+    muni, uf = None, None
+    metodo = None
+
+    if re.search(r"\bMG\b|Minas", t, re.I):
+        uf = "MG"
+    elif re.search(r"\bBA\b|Bahia", t, re.I):
+        uf = "BA"
+    elif re.search(r"\bSP\b|São Paulo", t, re.I):
+        uf = "SP"
+    elif re.search(r"\bGO\b|Goiás", t, re.I):
+        uf = "GO"
+    elif re.search(r"\bDF\b|Brasília|Brasilia", t, re.I):
+        uf = "DF"
+
+    municipios = [
+        "Januária", "Januaria", "Bonito de Minas", "Cônego Marinho", "Conego Marinho",
+        "Juvenília", "Juvenilha", "Itacarambi", "Pedras de Maria da Cruz", "São Francisco",
+        "Lontra", "Patis", "Montes Claros", "Varzelândia", "Manga", "Matias Cardoso",
+        "Miravânia", "Montalvânia", "Jaíba", "Jaiba", "Ubaí", "Ubai", "São João das Missões",
+        "Brasília de Minas", "Pintópolis", "Chapada Gaúcha", "Belo Horizonte"
+    ]
+    for m in municipios:
+        if re.search(r"\b" + re.escape(m) + r"\b", t, re.I):
+            muni = (
+                m.replace("Januaria", "Januária")
+                .replace("Conego Marinho", "Cônego Marinho")
+                .replace("Juvenilha", "Juvenília")
+                .replace("Jaiba", "Jaíba")
+                .replace("Ubai", "Ubaí")
+            )
+            if not uf:
+                uf = "MG"
+            break
+
+    if not muni and re.search(r"IFNMG|Brejo do amparo|Vila Paula|Vila Jadete|Riacho da Cruz|Campus Januária|Tejuco|Vila do Brejo", t, re.I):
+        muni = "Januária"
+        uf = "MG"
+
+    m_alt = re.search(r"(\d{2,4})\s*m\b", t, re.I)
+    if m_alt:
+        try:
+            alt = float(m_alt.group(1))
+        except ValueError:
+            pass
+
+    clean_t = t.replace(",", ".")
+    m_dec = re.search(r"(-?1[4-6]\.\d+)[^\d\-]+(-?4[3-5]\.\d+)", clean_t)
+    if m_dec:
+        try:
+            lat = float(m_dec.group(1))
+            lon = float(m_dec.group(2))
+            if lat > 0:
+                lat = -lat
+            if lon > 0:
+                lon = -lon
+            metodo = "GPS de Campo (Decimal)"
+        except ValueError:
+            pass
+
+    if not lat:
+        m_dms = re.search(
+            r"(\d{1,2})[º°\s]+(\d{1,2})['’`\s]+(\d{1,2}(?:\.\d+)?)['’`\"”\s]*[Ss]?[^\d\-]+(\d{1,2})[º°\s]+(\d{1,2})['’`\s]+(\d{1,2}(?:\.\d+)?)['’`\"”\s]*[WwOo]?",
+            t
+        )
+        if m_dms:
+            try:
+                d1, m1, s1, d2, m2, s2 = [float(x) for x in m_dms.groups()]
+                lat = -(d1 + m1 / 60.0 + s1 / 3600.0)
+                lon = -(d2 + m2 / 60.0 + s2 / 3600.0)
+                metodo = "GPS de Campo (DMS)"
+            except ValueError:
+                pass
+
+    bioma = "Cerrado" if uf == "MG" else None
+
+    return {
+        "latitude": lat,
+        "longitude": lon,
+        "altitude_m": alt,
+        "municipio": muni,
+        "estado": uf,
+        "bioma": bioma,
+        "metodo_geolocalizacao": metodo,
+    }
+
+
 def _taxonomia_body(r: ImportedRow) -> dict:
     return {
         "nome_cientifico": r.nome_cientifico,
         "familia": r.familia,
         "genero": r.genero,
-        "reino": r.filo,
+        "filo": r.filo,
         "classe": r.classe,
         "ordem": r.ordem,
         "autor_descricao": None,
@@ -493,18 +636,19 @@ def _taxonomia_body(r: ImportedRow) -> dict:
 def _localidade_body(r: ImportedRow) -> dict | None:
     if not r.localizacao:
         return None
+    geo = _parse_geo_location(r.localizacao)
     return {
         "pais": "Brasil",
-        "estado": _extract_uf(r.localizacao),
-        "municipio": _extract_municipio(r.localizacao),
+        "estado": geo.get("estado"),
+        "municipio": geo.get("municipio"),
         "localidade": r.localizacao,
-        "latitude": None,
-        "longitude": None,
-        "altitude_m": None,
+        "latitude": geo.get("latitude"),
+        "longitude": geo.get("longitude"),
+        "altitude_m": geo.get("altitude_m"),
         "datum_geodesico": "WGS84",
         "precisao_coordenadas_m": None,
-        "metodo_geolocalizacao": None,
-        "bioma": None,
+        "metodo_geolocalizacao": geo.get("metodo_geolocalizacao"),
+        "bioma": geo.get("bioma"),
     }
 
 
@@ -523,41 +667,20 @@ def _especime_body(r: ImportedRow, taxonomia_id: int | None, localidade_id: int 
         "condicao": None,
         "numero_individuos": 1,
         "descricao_morfologica": None,
-        "observacoes": None,
+        "observacoes": f"Origem: {r.origem}" if r.origem else None,
         "habitat": None,
         "identificado_por": None,
         "data_identificacao": None,
         "metodo_identificacao": None,
         "nivel_confianca_id": "média",
         "status": "ativo",
-        "localizacao_fisica": r.localizacao,
+        "localizacao_fisica": None,
         "meio_preservacao": "seco",
         "dwc_dataset_id": None,
         "referencias_bibliograficas": None,
         "direitos": "CC BY 4.0",
         "licenca": None,
     }
-
-
-_UF_RE = re.compile(r"\b([A-Z]{2})\b")
-_MUN_RE = re.compile(r"([A-Za-zÀ-ÖØ-öø-ÿ\s]+(?:Januária|Bonito de Minas|Pedras de Maria da Cruz|Cônego Marinho|Itacarambi|Patis|Lontra|São Francisco|Juvenília|Juvenilha|Fazenda|Comunidade|Centro|Brejo do amparo|Olhos d'água|Vila Jadete|Barreiro|Itacaranbi|Itacarambi|Projeto Jaíba|Barão de São Romão))\s*[-/,]?\s*(?:[-–]\s*)?(?:MG)?", re.IGNORECASE)
-
-
-def _extract_uf(text: str) -> str | None:
-    m = _UF_RE.search(text)
-    if m:
-        return m.group(1).upper()
-    return "MG" if re.search(r"Januaria|Minas|MG|Cônego Marinho", text, re.IGNORECASE) else None
-
-
-def _extract_municipio(text: str) -> str | None:
-    m = _MUN_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    tokens = re.split(r"\s*[-/,]\s*", text)
-    if tokens:
-        return tokens[0].strip()
-    return None
 
 
 # ── Pipeline de importação ───────────────────────────────────────────────────
@@ -576,16 +699,7 @@ async def run_import(api: HerbarioAPI, rows: list[ImportedRow]) -> list[Imported
         r.error = None
         try:
             taxa_body = _taxonomia_body(r)
-            taxa = None
-            try:
-                taxa = await api.create_taxonomia(taxa_body)
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 409:
-                    taxa = {"id": None, "nome_cientifico": taxa_body.get("nome_cientifico")}
-                else:
-                    r.error = f"taxonomia {exc.response.status_code}: {exc.response.text}"
-                    out.append(r)
-                    continue
+            taxa = await api.get_or_create_taxonomia(taxa_body)
             tax_id = taxa.get("id") if isinstance(taxa, dict) else None
             r.taxonomia_id = tax_id
             if tax_id is None:
@@ -597,15 +711,8 @@ async def run_import(api: HerbarioAPI, rows: list[ImportedRow]) -> list[Imported
             loc_id = None
             if loc_body:
                 try:
-                    loc = await api.create_localidade(loc_body)
+                    loc = await api.get_or_create_localidade(loc_body)
                     loc_id = loc.get("id") if isinstance(loc, dict) else None
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code == 409:
-                        loc_id = None
-                    else:
-                        r.error = f"localidade {exc.response.status_code}: {exc.response.text}"
-                        out.append(r)
-                        continue
                 except Exception:
                     loc_id = None
             r.localidade_id = loc_id

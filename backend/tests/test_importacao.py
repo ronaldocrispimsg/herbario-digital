@@ -91,3 +91,18 @@ def test_parse_csv_com_linha_de_titulo_e_acentos():
     assert preview.rows[0].nome_cientifico == "Punica granatum"
     assert preview.rows[0].familia == "Lythraceae"
 
+
+def test_parse_and_validate_ignora_linhas_banner_organizacao():
+    csv_content = (
+        "CÓDIGO,NOME CIENTIFICO,FAMILÍA\n"
+        "A1.1,Anacardium occidentale,Anacardiaceae\n"
+        "ORGANIZAÇÃO DO HERBARIO 2025,,\n"
+        "A1.2,Anacardium occidentale,Anacardiaceae\n"
+    ).encode("utf-8")
+
+    preview = ImportService.parse_and_validate_file(csv_content, "com_banners.csv")
+    assert preview.total_rows == 2
+    assert preview.rows[0].codigo == "A1.1"
+    assert preview.rows[1].codigo == "A1.2"
+
+

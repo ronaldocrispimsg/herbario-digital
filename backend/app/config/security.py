@@ -30,37 +30,4 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Credenciais inválidas",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    from app.services.usuario_service import UsuarioService
-    user = await UsuarioService.get_by_id(db, int(user_id))
-    if user is None:
-        raise credentials_exception
-    return user
-
-
-def require_roles(*roles):
-    """Decorator de dependência para exigir perfis específicos."""
-    async def role_checker(current_user=Depends(get_current_user)):
-        if current_user.perfil not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Acesso negado. Perfis permitidos: {', '.join(roles)}",
-            )
-        return current_user
-    return role_checker
+from app.core.security import get_current_user, require_roles

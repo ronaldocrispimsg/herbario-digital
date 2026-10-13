@@ -24,7 +24,6 @@ async def listar(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     skip = (page - 1) * per_page
     total, items = await EspecimeService.listar_todos(db, skip=skip, limit=per_page)
@@ -41,7 +40,6 @@ async def listar(
 async def buscar(
     filtros: BuscaEspecime,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     total, items = await EspecimeService.buscar(db, filtros)
     return PaginatedResponse(
@@ -90,7 +88,6 @@ async def exportar_dwca_todos(
 async def detalhe(
     especime_id: int,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     especime = await EspecimeService.get_by_id(db, especime_id)
     if not especime:
@@ -159,7 +156,6 @@ async def upload_imagem(
 async def listar_imagens(
     especime_id: int,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     return await ImagemService.listar_por_especime(db, especime_id)
 
@@ -183,7 +179,6 @@ async def remover_imagem(
 async def etiqueta(
     especime_id: int,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     especime = await EspecimeService.get_by_id(db, especime_id)
     if not especime:

@@ -34,7 +34,17 @@ async function api(method, path, body, isForm = false) {
   const opts = { method, headers };
   if (body) opts.body = isForm ? body : JSON.stringify(body);
   const res = await fetch(API_BASE + path, opts);
-  if (res.status === 401) { logout(); return null; }
+  if (res.status === 401) {
+    if (state.token) {
+      state.token = null;
+      state.user = null;
+      localStorage.removeItem('ba_token');
+      localStorage.removeItem('ba_user');
+      updateUIForAuth();
+      toast('Sua sessão expirou. Modo de consulta pública ativado.', 'error');
+    }
+    return null;
+  }
   if (res.status === 204 || res.status === 205) return null;
 
   const text = await res.text();
@@ -274,35 +284,61 @@ async function doLogin() {
   } finally { btn.disabled = false; btn.textContent = 'Entrar'; }
 }
 
-function postLogin() {
-  document.getElementById('user-name-badge').textContent = state.user?.nome || state.user?.email;
-  document.getElementById('nav').style.display = 'flex';
-  document.getElementById('topbar-right').style.display = 'flex';
-  if (canAdmin()) {
-    document.getElementById('nav-usuarios').style.display = '';
-    document.getElementById('nav-importacao').style.display = '';
+function updateUIForAuth() {
+  const isAuth = Boolean(state.token && state.user);
+  const guestActions = document.getElementById('guest-actions');
+  const userBadge = document.getElementById('user-badge');
+  const userNameBadge = document.getElementById('user-name-badge');
+  const userRoleBadge = document.getElementById('user-role-badge');
+  const navUsuarios = document.getElementById('nav-usuarios');
+  const navImportacao = document.getElementById('nav-importacao');
+  const navEmprestimos = document.getElementById('nav-emprestimos');
+  const cardStatUsuarios = document.getElementById('card-stat-usuarios');
+
+  if (isAuth) {
+    if (guestActions) guestActions.style.display = 'none';
+    if (userBadge) userBadge.style.display = 'flex';
+    if (userNameBadge) userNameBadge.textContent = state.user.nome || state.user.email;
+    if (userRoleBadge) {
+      const roleMap = { administrador: 'Admin', curador: 'Curador', leitor: 'Pesquisador' };
+      userRoleBadge.textContent = roleMap[state.user.perfil] || state.user.perfil || 'Usuário';
+    }
   } else {
-    document.getElementById('nav-usuarios').style.display = 'none';
-    document.getElementById('nav-importacao').style.display = 'none';
+    if (guestActions) guestActions.style.display = 'flex';
+    if (userBadge) userBadge.style.display = 'none';
   }
-  const loanBtn = document.querySelector('[data-screen="emprestimos"]');
-  if (loanBtn) {
-    loanBtn.style.display = state.user?.perfil === 'leitor' ? 'none' : '';
-  }
+
+  if (navUsuarios) navUsuarios.style.display = canAdmin() ? '' : 'none';
+  if (navImportacao) navImportacao.style.display = canAdmin() ? '' : 'none';
+  if (navEmprestimos) navEmprestimos.style.display = isAuth ? '' : 'none';
+  if (cardStatUsuarios) cardStatUsuarios.style.display = canAdmin() ? '' : 'none';
+
   document.querySelectorAll('.write-action').forEach(el => {
     el.style.display = canWrite() ? '' : 'none';
   });
   document.querySelectorAll('.admin-action').forEach(el => {
     el.style.display = canAdmin() ? '' : 'none';
   });
+}
+
+function postLogin() {
+  updateUIForAuth();
   navigateTo('dashboard');
 }
 
 function logout() {
-  state.token = null; state.user = null;
+  state.token = null;
+  state.user = null;
   localStorage.removeItem('ba_token');
   localStorage.removeItem('ba_user');
-  window.location.href = 'login.html';
+  updateUIForAuth();
+  toast('Sessão finalizada. Modo de consulta pública ativo.', 'info');
+  navigateTo('dashboard');
+}
+
+function downloadEtiqueta() {
+  if (!state.currentDetailEspecime) return;
+  window.open(`${API_BASE}/especimes/${state.currentDetailEspecime.id}/etiqueta`, '_blank');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -334,6 +370,11 @@ function navigateTo(screen) {
     navigateTo('dashboard');
     return;
   }
+  if (screen === 'emprestimos' && !state.user) {
+    toast('Acesso restrito: faça login para consultar ou gerenciar empréstimos.', 'error');
+    window.location.href = 'login.html';
+    return;
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const s = document.getElementById(`screen-${screen}`);
@@ -358,17 +399,23 @@ document.querySelectorAll('.nav-btn').forEach(b => {
 // ─────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const [especimes, taxonomias, localidades, usuarios] = await Promise.all([
+    const promises = [
       api('POST', '/especimes/buscar', { page:1, per_page:1 }),
       api('GET', '/taxonomias?per_page=1'),
       api('GET', '/localidades?per_page=1'),
-      api('GET', '/usuarios').catch(() => null),
-    ]);
+    ];
+    if (canAdmin()) {
+      promises.push(api('GET', '/usuarios').catch(() => null));
+    }
+    const [especimes, taxonomias, localidades, usuarios] = await Promise.all(promises);
 
     document.getElementById('stat-total').textContent = especimes?.total ?? '—';
     document.getElementById('stat-taxonomias').textContent = taxonomias?.total ?? '—';
     document.getElementById('stat-localidades').textContent = localidades?.total ?? '—';
-    document.getElementById('stat-usuarios').textContent = usuarios?.total ?? '—';
+    if (canAdmin() && usuarios) {
+      const uEl = document.getElementById('stat-usuarios');
+      if (uEl) uEl.textContent = usuarios.total ?? '—';
+    }
 
     const statuses = ['ativo','emprestado','em_processamento','descartado'];
     const counts = {};
@@ -499,7 +546,7 @@ function renderEspecimes(data) {
     return;
   }
   tbody.innerHTML = data.items.map(e => {
-    const loc = e.localidade ? [e.localidade.municipio, e.localidade.estado].filter(Boolean).join(', ') : '—';
+    const loc = e.localidade ? ([e.localidade.municipio, e.localidade.estado].filter(Boolean).join(', ') || e.localidade.localidade) : '—';
     const editButton = canWrite()
       ? `<button class="btn btn-sm" data-record="${escapeJsonAttr(e)}" onclick="editEspecime(this.dataset.record)">Editar</button>`
       : '';
@@ -1395,15 +1442,14 @@ function finishImport() {
   const currentPage = window.location.pathname.split('/').pop();
   const isLoginPage = currentPage === 'login.html';
 
-  if (state.token && state.user) {
-    if (isLoginPage) {
+  if (isLoginPage) {
+    if (state.token && state.user) {
       window.location.href = 'index.html';
       return;
     }
-    postLogin();
-  } else if (!isLoginPage) {
-    window.location.href = 'login.html';
-    return;
+  } else {
+    updateUIForAuth();
+    navigateTo('dashboard');
   }
 
   const pwInput = document.getElementById('login-senha');

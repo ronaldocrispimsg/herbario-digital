@@ -47,7 +47,6 @@ async def listar_taxonomias(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     query = select(Taxonomia)
     if q:
@@ -66,7 +65,7 @@ async def listar_taxonomias(
 
 
 @taxonomia_router.get("/{tid}", response_model=TaxonomiaOut)
-async def detalhe_taxonomia(tid: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def detalhe_taxonomia(tid: int, db: AsyncSession = Depends(get_db)):
     t = (await db.execute(select(Taxonomia).where(Taxonomia.id == tid))).scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Taxonomia não encontrada")
@@ -125,7 +124,6 @@ async def listar_localidades(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_user),
 ):
     query = select(LocalidadeGeografica)
     if estado:
@@ -142,7 +140,7 @@ async def listar_localidades(
 
 
 @localidade_router.get("/{lid}", response_model=LocalidadeOut)
-async def detalhe_localidade(lid: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def detalhe_localidade(lid: int, db: AsyncSession = Depends(get_db)):
     l = (await db.execute(select(LocalidadeGeografica).where(LocalidadeGeografica.id == lid))).scalar_one_or_none()
     if not l:
         raise HTTPException(404, "Localidade não encontrada")

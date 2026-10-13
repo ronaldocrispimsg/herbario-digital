@@ -75,3 +75,21 @@ async def test_upload_rejeita_arquivo_que_nao_e_imagem():
         await ImagemService.upload(SimpleNamespace(), 1, upload)
 
     assert getattr(exc.value, "status_code", None) == 400
+
+
+def test_visitante_anonimo_consulta_publica():
+    client = TestClient(app)
+    # Endpoints de leitura devem ser acessíveis sem token (200 OK)
+    assert client.get("/api/v1/especimes").status_code == 200
+    assert client.post("/api/v1/especimes/buscar", json={"page": 1, "per_page": 10}).status_code == 200
+    assert client.get("/api/v1/taxonomias").status_code == 200
+    assert client.get("/api/v1/localidades").status_code == 200
+
+    # Endpoints de escrita e administração continuam bloqueados para anônimos (401 Unauthorized)
+    assert client.post("/api/v1/especimes", json={}).status_code == 401
+    assert client.put("/api/v1/especimes/1", json={}).status_code == 401
+    assert client.delete("/api/v1/especimes/1").status_code == 401
+    assert client.post("/api/v1/taxonomias", json={}).status_code == 401
+    assert client.post("/api/v1/localidades", json={}).status_code == 401
+    assert client.get("/api/v1/usuarios").status_code == 401
+    assert client.get("/api/v1/emprestimos").status_code == 401
