@@ -54,8 +54,11 @@ app.add_middleware(
 
 # Servir arquivos persistidos no bucket via /uploads.
 # TODO: avaliar regra de negócio para tornar imagens privadas/autorizadas sem quebrar a galeria atual.
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+try:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+except Exception:
+    pass
 
 # Registrar rotas
 app.include_router(api_router)

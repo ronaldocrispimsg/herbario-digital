@@ -69,7 +69,8 @@ services:
       - ./bucket/data:/data
     expose:
       - "9000"
-      - "9001"
+      - "8888"
+      - "9333"
 
   frontend:
     build:

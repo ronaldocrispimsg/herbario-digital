@@ -58,5 +58,8 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Garantir que os diretórios existam
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(settings.EXPORT_DIR, exist_ok=True)
+try:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(settings.EXPORT_DIR, exist_ok=True)
+except Exception:
+    pass

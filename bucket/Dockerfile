@@ -1,10 +1,13 @@
-FROM pgsty/silo:latest
+FROM chrislusf/seaweedfs:latest
 
-LABEL org.opencontainers.image.title="BioAcervo Bucket"
-LABEL org.opencontainers.image.description="MinIO object storage for BioAcervo uploads and exports"
+LABEL org.opencontainers.image.title="BioAcervo Bucket (SeaweedFS)"
+LABEL org.opencontainers.image.description="SeaweedFS object storage com API S3 compatível para BioAcervo"
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 VOLUME ["/data"]
 
-EXPOSE 9000 9001
+EXPOSE 9000 8888 9333
 
-CMD ["server", "/data", "--console-address", ":9001"]
+ENTRYPOINT ["/entrypoint.sh"]

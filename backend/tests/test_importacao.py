@@ -30,17 +30,18 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
-def test_leitor_nao_acessa_importacao():
-    client = _client_for(perfil=PerfilUsuario.leitor)
-    res_preview = client.post("/api/v1/import/preview", files={"file": ("test.csv", b"codigo,nome_cientifico\nHERB-1,Tabebuia rosea")})
-    assert res_preview.status_code == 403
+def test_nao_admin_nao_acessa_importacao():
+    for perfil in [PerfilUsuario.leitor, PerfilUsuario.curador]:
+        client = _client_for(perfil=perfil)
+        res_preview = client.post("/api/v1/import/preview", files={"file": ("test.csv", b"codigo,nome_cientifico\nHERB-1,Tabebuia rosea")})
+        assert res_preview.status_code == 403
 
-    res_exec = client.post("/api/v1/import/execute", json={"rows": []})
-    assert res_exec.status_code == 403
+        res_exec = client.post("/api/v1/import/execute", json={"rows": []})
+        assert res_exec.status_code == 403
 
 
 def test_preview_importacao_csv_sucesso():
-    client = _client_for(perfil=PerfilUsuario.curador)
+    client = _client_for(perfil=PerfilUsuario.administrador)
     csv_content = (
         "codigo,nome_cientifico,familia,localizacao,coletor,data_coleta\n"
         "HERB-0001,Handroanthus chrysotrichus,Bignoniaceae,Belo Horizonte,Silva J.,2024-05-10\n"

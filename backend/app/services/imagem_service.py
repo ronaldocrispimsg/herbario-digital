@@ -1,3 +1,5 @@
+
+
 import uuid
 import asyncio
 import json
@@ -54,7 +56,10 @@ class ImagemService:
                 }
             ],
         }
-        client.set_bucket_policy(bucket, json.dumps(policy))
+        try:
+            client.set_bucket_policy(bucket, json.dumps(policy))
+        except Exception:
+            pass
 
     @classmethod
     async def _ensure_bucket(cls, client: Minio) -> None:

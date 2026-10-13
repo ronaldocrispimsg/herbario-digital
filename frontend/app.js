@@ -278,10 +278,12 @@ function postLogin() {
   document.getElementById('user-name-badge').textContent = state.user?.nome || state.user?.email;
   document.getElementById('nav').style.display = 'flex';
   document.getElementById('topbar-right').style.display = 'flex';
-  if (state.user?.perfil === 'administrador') {
+  if (canAdmin()) {
     document.getElementById('nav-usuarios').style.display = '';
+    document.getElementById('nav-importacao').style.display = '';
   } else {
     document.getElementById('nav-usuarios').style.display = 'none';
+    document.getElementById('nav-importacao').style.display = 'none';
   }
   const loanBtn = document.querySelector('[data-screen="emprestimos"]');
   if (loanBtn) {
@@ -293,10 +295,6 @@ function postLogin() {
   document.querySelectorAll('.admin-action').forEach(el => {
     el.style.display = canAdmin() ? '' : 'none';
   });
-  const navImport = document.getElementById('nav-importacao');
-  if (navImport) navImport.style.display = canWrite() ? '' : 'none';
-  const btnImpEsp = document.getElementById('btn-importar-especimes');
-  if (btnImpEsp) btnImpEsp.style.display = canWrite() ? '' : 'none';
   navigateTo('dashboard');
 }
 
@@ -326,6 +324,16 @@ document.addEventListener('DOMContentLoaded', () => {
 //  NAVEGAÇÃO
 // ─────────────────────────────────────────────
 function navigateTo(screen) {
+  if (screen === 'importacao' && !canAdmin()) {
+    toast('Acesso restrito: a aba de importação é exclusiva para administradores.', 'error');
+    navigateTo('dashboard');
+    return;
+  }
+  if (screen === 'usuarios' && !canAdmin()) {
+    toast('Acesso restrito: gerenciamento de usuários é exclusivo para administradores.', 'error');
+    navigateTo('dashboard');
+    return;
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const s = document.getElementById(`screen-${screen}`);
@@ -1079,6 +1087,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') document.que
 //  IMPORTAÇÃO DE PLANILHAS (TELA INTEGRADA)
 // ─────────────────────────────────────────────
 function initImportScreen() {
+  if (!canAdmin()) return;
   const zone = document.getElementById('page-import-drop-zone');
   if (zone && !zone.dataset.bound) {
     zone.dataset.bound = 'true';

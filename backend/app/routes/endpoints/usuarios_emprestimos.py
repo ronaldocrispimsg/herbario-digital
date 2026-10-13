@@ -137,7 +137,10 @@ async def criar_emprestimo(
 
     # Atualizar status do espécime
     especime.status = "emprestado"
-    emprestimo.especime = especime
+    try:
+        emprestimo.especime = especime
+    except Exception:
+        pass
     await db.flush()
     await db.refresh(emprestimo)
     return emprestimo

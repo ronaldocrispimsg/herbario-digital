@@ -21,7 +21,7 @@ router = APIRouter(prefix="/import", tags=["Importação de Planilhas"])
 )
 async def preview_import(
     file: UploadFile = File(...),
-    current_user=Depends(require_roles(PerfilUsuario.administrador, PerfilUsuario.curador)),
+    current_user=Depends(require_roles(PerfilUsuario.administrador)),
 ):
     if not file.filename.lower().endswith((".xlsx", ".csv", ".xls")):
         raise HTTPException(
@@ -54,7 +54,7 @@ async def preview_import(
 async def execute_import(
     request: ImportExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(require_roles(PerfilUsuario.administrador, PerfilUsuario.curador)),
+    current_user=Depends(require_roles(PerfilUsuario.administrador)),
 ):
     if not request.rows:
         raise HTTPException(

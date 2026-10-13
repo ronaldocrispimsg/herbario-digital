@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
 </head>
 <body>
 <div id="app">
@@ -20,7 +20,7 @@
       <button class="nav-btn" data-screen="taxonomias">Taxonomias</button>
       <button class="nav-btn" data-screen="localidades">Localidades</button>
       <button class="nav-btn" data-screen="emprestimos">Empréstimos</button>
-      <button class="nav-btn write-action" data-screen="importacao" id="nav-importacao" style="display:none">Importação</button>
+      <button class="nav-btn admin-action" data-screen="importacao" id="nav-importacao" style="display:none">Importação</button>
       <button class="nav-btn" data-screen="usuarios" id="nav-usuarios" style="display:none">Usuários</button>
     </nav>
     <div id="topbar-right" style="display:none">
@@ -68,7 +68,7 @@
       <div class="page-header">
         <div><h2>Espécimes</h2><p>Catálogo do acervo biológico</p></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-ghost write-action" id="btn-importar-especimes" onclick="navigateTo('importacao')" style="display:none">📂 Importar Planilha</button>
+          <button class="btn btn-sm btn-ghost admin-action" id="btn-importar-especimes" onclick="navigateTo('importacao')" style="display:none">📂 Importar Planilha</button>
           <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
         </div>
       </div>
@@ -611,6 +611,6 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
