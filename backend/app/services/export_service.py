@@ -10,7 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models.models import Especime
-from app.config.config import settings
+
+try:
+    from app.config.config import settings
+except ImportError:
+    from app.core.config import settings
+
 
 
 class ExportService:

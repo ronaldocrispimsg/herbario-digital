@@ -4,7 +4,11 @@ import sys
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.config.config import settings
+try:
+    from app.config.config import settings
+except ImportError:
+    from app.core.config import settings
+
 
 
 async def main() -> None:

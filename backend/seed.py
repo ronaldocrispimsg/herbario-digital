@@ -2,10 +2,15 @@
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.config.config import settings
+try:
+    from app.config.config import settings
+    from app.config.security import get_password_hash
+except ImportError:
+    from app.core.config import settings
+    from app.core.security import get_password_hash
+
 from app.db.session import Base
 from app.models.models import Usuario, PerfilUsuario
-from app.config.security import get_password_hash
 
 
 async def criar_banco():
@@ -22,7 +27,7 @@ async def criar_banco():
         admin_email = settings.ADMIN_EMAIL
         admin_password = settings.ADMIN_PASSWORD
         if not admin_email or not admin_password:
-            if settings.is_production:
+            if getattr(settings, "is_production", False):
                 print("⚠️  ADMIN_EMAIL/ADMIN_PASSWORD ausentes; admin inicial não será criado.")
                 await engine.dispose()
                 return

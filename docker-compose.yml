@@ -47,6 +47,8 @@ services:
         condition: service_healthy
       bucket:
         condition: service_started
+    volumes:
+      - ./backend/app:/app/app
     expose:
       - "8000"
     healthcheck:
@@ -77,6 +79,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - ./frontend:/usr/share/nginx/html
     expose:
       - "80"
     healthcheck:

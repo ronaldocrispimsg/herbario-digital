@@ -5,7 +5,11 @@ from datetime import datetime
 
 from app.models.models import Usuario
 from app.schemas.schemas import UsuarioCreate, UsuarioUpdate, UsuarioSelfUpdate
-from app.config.security import get_password_hash, verify_password
+try:
+    from app.config.security import get_password_hash, verify_password
+except ImportError:
+    from app.core.security import get_password_hash, verify_password
+
 
 
 class UsuarioService:
