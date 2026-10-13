@@ -1,4 +1,4 @@
-FROM quay.io/minio/minio
+FROM pgsty/silo:latest
 
 LABEL org.opencontainers.image.title="BioAcervo Bucket"
 LABEL org.opencontainers.image.description="MinIO object storage for BioAcervo uploads and exports"
