@@ -50,8 +50,10 @@ def _detect_and_map_headers(header_tuple: tuple) -> Dict[int, str]:
         "nome popular": "nome_popular",
         "familia": "familia",
         "família": "familia",
+        "familía": "familia",
         "genero": "genero",
         "gênero": "genero",
+        "género": "genero",
         "especie": "especie",
         "espécie": "especie",
         "localizacao": "localizacao",
@@ -86,16 +88,27 @@ class ImportService:
             lines = text.splitlines()
             reader = csv.reader(lines)
             headers = None
+            pending_rows = []
             for row_idx, row in enumerate(reader, start=1):
                 if not row or not any(row):
                     continue
                 if headers is None:
-                    headers = _detect_and_map_headers(tuple(row))
-                    if not headers:
-                        headers = {i: f"col_{i}" for i in range(len(row))}
+                    joined = " ".join(row).upper()
+                    if any(token in joined for token in ["CÓDIGO", "CODIGO", "NOME CIENTIFICO", "FAMILIA", "FAMILÍA", "ESPÉCIE", "ESPECIE"]):
+                        headers = _detect_and_map_headers(tuple(row))
+                        continue
+                    pending_rows.append((row_idx, row))
                     continue
 
                 raw_rows.append((row_idx, "CSV", row, headers))
+
+            if headers is None and pending_rows:
+                first_idx, first_row = pending_rows[0]
+                headers = _detect_and_map_headers(tuple(first_row))
+                if not headers:
+                    headers = {i: f"col_{i}" for i in range(len(first_row))}
+                for row_idx, row in pending_rows[1:]:
+                    raw_rows.append((row_idx, "CSV", row, headers))
         else:
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
             for sheet_name in wb.sheetnames:

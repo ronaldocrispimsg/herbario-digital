@@ -40,13 +40,22 @@ except Exception:
 
 try:
     from openpyxl import load_workbook
-except Exception as exc:  # pragma: no cover
-    raise SystemExit(f"openpyxl necessária: {exc}")
+except Exception:
+    load_workbook = None
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_XLSX = PROJECT_ROOT / "Organização Herbário.xlsx"
+DEFAULT_XLSX = (
+    PROJECT_ROOT / "Organização Herbário.xlsx"
+    if (PROJECT_ROOT / "Organização Herbário.xlsx").exists()
+    else (
+        PROJECT_ROOT / "csv" / "Organização Herbário.xlsx"
+        if (PROJECT_ROOT / "csv" / "Organização Herbário.xlsx").exists()
+        else PROJECT_ROOT / "Organização Herbário.xlsx"
+    )
+)
 REPORT_PATH = PROJECT_ROOT / "scripts" / "import_report.json"
 MAX_CONCURRENT = 8  # estabilidade para teste/prod leve
+
 
 
 # ── Modelos de registro bruto e normalizado ──────────────────────────────────
@@ -205,6 +214,8 @@ def _coerce(row: tuple, headers: dict[int, str]) -> RawRow | None:
 
 
 def parse_xlsx(path: Path) -> tuple[list[RawRow], dict[str, int]]:
+    if load_workbook is None:
+        raise SystemExit("openpyxl é necessária para ler planilhas .xlsx. Instale com: pip install openpyxl")
     wb = load_workbook(path, read_only=True, data_only=True)
     rows: list[RawRow] = []
     stats: dict[str, int] = {"sheets": len(wb.sheetnames), "parsed": 0, "skipped": 0}
@@ -240,6 +251,44 @@ def parse_xlsx(path: Path) -> tuple[list[RawRow], dict[str, int]]:
         r.row_index = idx
 
     return rows, stats
+
+
+def parse_csv(path: Path) -> tuple[list[RawRow], dict[str, int]]:
+    rows: list[RawRow] = []
+    stats: dict[str, int] = {"sheets": 1, "parsed": 0, "skipped": 0}
+    with path.open("r", encoding="utf-8-sig", errors="ignore") as f:
+        reader = csv.reader(f)
+        headers = None
+        for row in reader:
+            if not row or not any(row):
+                continue
+            text_row = tuple("" if v is None else str(v).strip() for v in row)
+            joined = " ".join(text_row).upper()
+            if any(token in joined for token in ["CÓDIGO", "CODIGO", "CÓDIGO "]):
+                headers = _detect_and_map_headers(text_row)
+                continue
+            if headers is None:
+                continue
+            parsed = _coerce(text_row, headers)
+            if parsed:
+                parsed.sheet = path.stem
+                parsed.row_index = len(rows) + 1
+                rows.append(parsed)
+                stats["parsed"] += 1
+            else:
+                stats["skipped"] += 1
+
+    for idx, r in enumerate(rows, start=1):
+        r.row_index = idx
+
+    return rows, stats
+
+
+def parse_file(path: Path) -> tuple[list[RawRow], dict[str, int]]:
+    if path.suffix.lower() == ".csv":
+        return parse_csv(path)
+    return parse_xlsx(path)
+
 
 
 # ── Normalização / dedup / anonimização leve ────────────────────────────────
@@ -294,7 +343,7 @@ def normalize_rows(rows: Iterable[RawRow]) -> list[ImportedRow]:
 
 def export_report(rows: list[ImportedRow], path: Path) -> None:
     payload = {
-        "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "total": len(rows),
         "with_date": sum(1 for r in rows if r.data_coleta),
         "without_date": sum(1 for r in rows if not r.data_coleta),
@@ -580,7 +629,7 @@ async def run_import(api: HerbarioAPI, rows: list[ImportedRow]) -> list[Imported
 def main() -> int:
     p = argparse.ArgumentParser(description="Importador do acervo do Herbário Digital")
     p.add_argument("--mode", choices=["dry-run", "import"], default="dry-run")
-    p.add_argument("--xlsx", type=Path, default=DEFAULT_XLSX)
+    p.add_argument("--file", "--xlsx", dest="file_path", type=Path, default=DEFAULT_XLSX, help="Caminho do arquivo .xlsx ou .csv")
     p.add_argument("--url", default="http://localhost:8000")
     p.add_argument("--token")
     p.add_argument("--login")
@@ -590,12 +639,13 @@ def main() -> int:
     p.add_argument("--csv", type=Path, default=REPORT_PATH.with_suffix(".csv"))
     args = p.parse_args()
 
-    if not args.xlsx.exists():
-        print(f"Arquivo não encontrado: {args.xlsx}")
+    target_file = args.file_path
+    if not target_file.exists():
+        print(f"Arquivo não encontrado: {target_file}")
         return 2
 
-    print(f"✅ Abrindo planilha: {args.xlsx}")
-    raw_rows, stats = parse_xlsx(args.xlsx)
+    print(f"✅ Abrindo arquivo: {target_file}")
+    raw_rows, stats = parse_file(target_file)
     print(f"Planilhas={stats['sheets']} parsed={stats['parsed']} skipped={stats['skipped']}")
 
     normalized = normalize_rows(raw_rows)

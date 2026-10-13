@@ -65,3 +65,20 @@ def test_parse_and_validate_file_warning_duplicados():
     assert preview.total_rows == 2
     assert preview.warning_rows == 1
     assert preview.rows[1].status_validacao == "warning"
+
+
+def test_parse_csv_com_linha_de_titulo_e_acentos():
+    csv_content = (
+        "ORGANIZAÇÃO DO HERBÁRIO 2023/2024,,,,,\n"
+        "CÓDIGO ,NOME CIENTIFICO,NOME POPULAR,FAMILÍA,LOCALIZAÇÃO\n"
+        "FR.1,Punica granatum,Romã,Lythraceae,Conego Marinho - MG\n"
+        "FR.2,Bixa orellana,Urucum,Bixaceae,Conego Marinho - MG\n"
+    ).encode("utf-8")
+
+    preview = ImportService.parse_and_validate_file(csv_content, "frutos.csv")
+    assert preview.total_rows == 2
+    assert preview.valid_rows == 2
+    assert preview.rows[0].codigo == "FR.1"
+    assert preview.rows[0].nome_cientifico == "Punica granatum"
+    assert preview.rows[0].familia == "Lythraceae"
+

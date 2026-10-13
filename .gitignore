@@ -29,5 +29,9 @@ renders/.build/
 *.fls
 *.fdb_latexmk
 *.xlsx
+*.csv
+csv/
+scripts/import_report.csv
 
 .DS_STORE
+
