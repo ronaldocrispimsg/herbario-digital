@@ -68,7 +68,7 @@
       <div class="page-header">
         <div><h2>Espécimes</h2><p>Catálogo do acervo biológico</p></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-ghost write-action" id="btn-importar-especimes" onclick="openModalImport()" style="display:none">📂 Importar Planilha</button>
+          <button class="btn btn-sm btn-ghost write-action" id="btn-importar-especimes" onclick="navigateTo('importacao')" style="display:none">📂 Importar Planilha</button>
           <button class="btn btn-sm write-action" id="btn-novo-especime" onclick="openModalEspecime()">+ Novo Espécime</button>
         </div>
       </div>
@@ -190,16 +190,133 @@
     <!-- ── IMPORTACAO ── -->
     <div id="screen-importacao" class="screen">
       <div class="page-header">
-        <div><h2>Importação de Planilhas</h2><p>Ingestão de acervos via arquivos .xlsx e .csv</p></div>
-        <button class="btn btn-sm write-action" onclick="openModalImport()">📂 Nova Importação</button>
+        <div>
+          <h2>Importação de Planilhas</h2>
+          <p>Ingestão e catalogação em lote via arquivos Excel (.xlsx) e CSV (.csv)</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" id="page-btn-reset-import" onclick="resetImportScreen()" style="display:none">🔄 Outra Planilha</button>
+        </div>
       </div>
-      <div class="stat-card" style="margin-bottom:20px;padding:24px;background:var(--bg3);border:1px dashed var(--border2)">
-        <h3 style="font-family:var(--font-serif);color:var(--leaf);margin-bottom:8px">Como funciona a importação?</h3>
-        <p style="color:var(--muted);font-size:.9rem;line-height:1.5">
-          1. Envie uma planilha no formato Excel (.xlsx) ou CSV (.csv).<br/>
-          2. O sistema executará uma <strong>validação prévia (Dry-Run)</strong> e detectará taxonomias, localidades e códigos.<br/>
-          3. Você poderá revisar os registros e confirmar a gravação direta no banco de dados.
-        </p>
+
+      <!-- Guia rápido de funcionamento -->
+      <div class="import-info-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px">
+        <div class="stat-card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:1.4rem">📊</span>
+            <strong style="color:var(--text);font-size:.95rem">Formatos Suportados</strong>
+          </div>
+          <p style="color:var(--muted);font-size:.85rem;line-height:1.4">Planilhas Excel (<strong>.xlsx</strong>) incluindo múltiplas abas, e arquivos delimitados (<strong>.csv</strong>).</p>
+        </div>
+        <div class="stat-card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:1.4rem">🛡️</span>
+            <strong style="color:var(--text);font-size:.95rem">Validação Prévia (Dry-Run)</strong>
+          </div>
+          <p style="color:var(--muted);font-size:.85rem;line-height:1.4">Os registros são analisados antes de gravar: detecta integridade, códigos e duplicidades.</p>
+        </div>
+        <div class="stat-card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:1.4rem">🌿</span>
+            <strong style="color:var(--text);font-size:.95rem">Vínculos Automáticos</strong>
+          </div>
+          <p style="color:var(--muted);font-size:.85rem;line-height:1.4">Taxonomias (Família, Gênero, Espécie) e Localidades são associadas ou cadastradas dinamicamente.</p>
+        </div>
+      </div>
+
+      <!-- Etapa 1: Upload / Dropzone integrado na página -->
+      <div id="page-import-step-upload">
+        <div class="drop-zone" id="page-import-drop-zone" onclick="document.getElementById('page-import-file-input').click()" style="padding:54px 24px;border-width:2px;cursor:pointer">
+          <span style="font-size:3.5rem;margin-bottom:12px">📂</span>
+          <p style="font-size:1.2rem;font-weight:600;color:var(--text);margin-bottom:6px">
+            Arraste e solte sua planilha aqui ou <span style="color:var(--moss);text-decoration:underline">clique para selecionar</span>
+          </p>
+          <span style="font-size:.88rem;color:var(--muted);margin-bottom:18px">
+            Compatível com arquivos <strong>.xlsx</strong> e <strong>.csv</strong>
+          </span>
+          <button type="button" class="btn btn-sm" onclick="event.stopPropagation();document.getElementById('page-import-file-input').click()">
+            Selecionar Planilha do Computador
+          </button>
+          <input type="file" id="page-import-file-input" accept=".xlsx,.csv" style="display:none" onchange="handlePageImportFileSelect(event)" />
+        </div>
+
+        <div id="page-import-loading" style="display:none;text-align:center;padding:50px 24px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;">
+          <div class="loader" style="margin:0 auto 16px auto"></div>
+          <h4 style="color:var(--leaf);margin-bottom:6px;font-size:1.1rem">Analisando e validando planilha...</h4>
+          <p style="color:var(--muted);font-size:.9rem" id="page-import-loading-msg">Executando validação prévia dos registros (Dry-Run)</p>
+        </div>
+      </div>
+
+      <!-- Etapa 2: Pré-visualização / Dry-run na página -->
+      <div id="page-import-step-preview" style="display:none;margin-top:16px">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 20px;">
+          <div class="stat-card">
+            <div class="label">Total de Linhas</div>
+            <div class="value" id="page-imp-stat-total">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Linhas Válidas</div>
+            <div class="value" id="page-imp-stat-valid" style="color:var(--leaf)">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Avisos / Alertas</div>
+            <div class="value" id="page-imp-stat-warn" style="color:var(--warn)">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Novas Taxonomias</div>
+            <div class="value" id="page-imp-stat-tax">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Novas Localidades</div>
+            <div class="value" id="page-imp-stat-loc">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card" style="padding:20px;margin-bottom:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+            <div>
+              <h3 style="font-size:1.1rem;color:var(--text);margin-bottom:2px">Pré-visualização dos Registros</h3>
+              <p style="font-size:.85rem;color:var(--muted)">Revise a amostra dos dados antes de confirmar a gravação no banco</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm btn-ghost" onclick="resetImportScreen()">Trocar Arquivo</button>
+              <button class="btn btn-sm" id="page-btn-confirm-import" onclick="confirmPageImport()">
+                ✅ Confirmar e Gravar no Banco
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap" style="max-height: 440px; overflow-y: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Linha</th>
+                  <th>Código</th>
+                  <th>Nome Científico</th>
+                  <th>Família</th>
+                  <th>Localidade</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="page-import-tbody-preview"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Etapa 3: Resultado / Conclusão -->
+      <div id="page-import-step-result" style="display:none;margin-top:16px">
+        <div class="stat-card" style="background:var(--bg3);padding:36px 24px;margin-bottom:20px;text-align:center;border:1px solid var(--leaf)">
+          <span style="font-size:3.5rem">🎉</span>
+          <h3 style="color:var(--leaf);margin-top:12px;font-size:1.35rem">Importação Concluída com Sucesso!</h3>
+          <p id="page-import-result-summary" style="color:var(--text);font-size:1rem;margin-top:8px;line-height:1.6"></p>
+          <div style="display:flex;justify-content:center;gap:12px;margin-top:24px">
+            <button class="btn btn-sm" onclick="navigateTo('especimes')">Ver no Catálogo de Espécimes</button>
+            <button class="btn btn-sm btn-ghost" onclick="resetImportScreen()">Importar Outra Planilha</button>
+          </div>
+        </div>
+
+        <div id="page-import-result-errors" style="display:none;background:rgba(192,72,42,.08);border:1px solid var(--danger);padding:16px;border-radius:var(--radius);font-size:.9rem;color:var(--danger);margin-bottom:20px"></div>
       </div>
     </div>
   </div><!-- /main -->

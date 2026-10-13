@@ -338,6 +338,7 @@ function navigateTo(screen) {
   if (screen === 'localidades') loadLocalidades(1);
   if (screen === 'emprestimos') { loadSelectsForEmprestimo(); loadEmprestimos(); }
   if (screen === 'usuarios') loadUsuarios();
+  if (screen === 'importacao') initImportScreen();
 }
 
 document.querySelectorAll('.nav-btn').forEach(b => {
@@ -1075,7 +1076,164 @@ function closeOverlay(e, id) { if (e.target.id === id) closeModal(id); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open')); });
 
 // ─────────────────────────────────────────────
-//  IMPORTAÇÃO DE PLANILHAS
+//  IMPORTAÇÃO DE PLANILHAS (TELA INTEGRADA)
+// ─────────────────────────────────────────────
+function initImportScreen() {
+  const zone = document.getElementById('page-import-drop-zone');
+  if (zone && !zone.dataset.bound) {
+    zone.dataset.bound = 'true';
+    ['dragenter', 'dragover'].forEach(name => {
+      zone.addEventListener(name, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('drop-zone--over');
+      });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      zone.addEventListener(name, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('drop-zone--over');
+      });
+    });
+    zone.addEventListener('drop', e => {
+      const files = e.dataTransfer?.files;
+      if (files && files.length) {
+        processPageFileForImport(files[0]);
+      }
+    });
+  }
+}
+
+function handlePageImportFileSelect(e) {
+  const files = e.target.files;
+  if (files && files.length) {
+    processPageFileForImport(files[0]);
+  }
+}
+
+async function processPageFileForImport(file) {
+  if (!file.name.match(/\.(xlsx|csv)$/i)) {
+    toast('Selecione um arquivo de planilha (.xlsx ou .csv)', 'error');
+    return;
+  }
+  state.importFile = file;
+  const dropZone = document.getElementById('page-import-drop-zone');
+  const loading = document.getElementById('page-import-loading');
+  const loadingMsg = document.getElementById('page-import-loading-msg');
+  if (dropZone) dropZone.style.display = 'none';
+  if (loading) loading.style.display = 'block';
+  if (loadingMsg) loadingMsg.textContent = `Lendo "${file.name}" e processando validação prévia...`;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const data = await api('POST', '/import/preview', formData, true);
+    state.importPreviewData = data;
+    renderPageImportPreview(data);
+  } catch (err) {
+    toast(err.message || 'Falha ao processar arquivo.', 'error');
+    if (dropZone) dropZone.style.display = 'flex';
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+function renderPageImportPreview(data) {
+  const loading = document.getElementById('page-import-loading');
+  const uploadStep = document.getElementById('page-import-step-upload');
+  const previewStep = document.getElementById('page-import-step-preview');
+  const resetBtn = document.getElementById('page-btn-reset-import');
+
+  if (loading) loading.style.display = 'none';
+  if (uploadStep) uploadStep.style.display = 'none';
+  if (previewStep) previewStep.style.display = 'block';
+  if (resetBtn) resetBtn.style.display = '';
+
+  document.getElementById('page-imp-stat-total').textContent = data.total_rows || 0;
+  document.getElementById('page-imp-stat-valid').textContent = data.valid_rows || 0;
+  document.getElementById('page-imp-stat-warn').textContent = data.warning_rows || 0;
+  document.getElementById('page-imp-stat-tax').textContent = data.new_taxonomias_est || 0;
+  document.getElementById('page-imp-stat-loc').textContent = data.new_localidades_est || 0;
+
+  const tbody = document.getElementById('page-import-tbody-preview');
+  tbody.innerHTML = (data.rows || []).slice(0, 100).map(r => {
+    let badgeClass = 'badge-status-valid';
+    let badgeText = 'Válido';
+    if (r.status_validacao === 'warning') {
+      badgeClass = 'badge-status-warn';
+      badgeText = 'Alerta';
+    } else if (r.status_validacao === 'error') {
+      badgeClass = 'badge-status-error';
+      badgeText = 'Erro';
+    }
+    return `<tr>
+      <td>${r.row_index}</td>
+      <td style="font-family:var(--font-mono)">${escapeHTML(r.codigo)}</td>
+      <td style="font-style:italic">${escapeHTML(r.nome_cientifico)}</td>
+      <td>${escapeHTML(r.familia || '—')}</td>
+      <td>${escapeHTML(r.localizacao || '—')}</td>
+      <td><span class="${badgeClass}">${badgeText}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function confirmPageImport() {
+  if (!state.importPreviewData || !state.importPreviewData.rows) return;
+  const btn = document.getElementById('page-btn-confirm-import');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  try {
+    const result = await api('POST', '/import/execute', { rows: state.importPreviewData.rows });
+    document.getElementById('page-import-step-preview').style.display = 'none';
+    document.getElementById('page-import-step-result').style.display = 'block';
+
+    document.getElementById('page-import-result-summary').innerHTML = `
+      <strong>${result.especimes_criados}</strong> espécimes criados, 
+      <strong>${result.especimes_atualizados}</strong> atualizados.<br/>
+      <strong>${result.taxonomias_criadas}</strong> taxonomias e <strong>${result.localidades_criadas}</strong> localidades cadastradas.
+    `;
+
+    const errDiv = document.getElementById('page-import-result-errors');
+    if (result.erros > 0 && result.detalhes_erros.length) {
+      errDiv.style.display = 'block';
+      errDiv.innerHTML = `<strong>Atenção:</strong> Ocorreram ${result.erros} erro(s):<br/>` + result.detalhes_erros.join('<br/>');
+    } else {
+      errDiv.style.display = 'none';
+    }
+
+    toast('Importação concluída com sucesso!');
+  } catch (err) {
+    toast(err.message || 'Erro ao executar importação.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ Confirmar e Gravar no Banco';
+  }
+}
+
+function resetImportScreen() {
+  state.importFile = null;
+  state.importPreviewData = null;
+  const fileInput = document.getElementById('page-import-file-input');
+  if (fileInput) fileInput.value = '';
+
+  const uploadStep = document.getElementById('page-import-step-upload');
+  const dropZone = document.getElementById('page-import-drop-zone');
+  const loading = document.getElementById('page-import-loading');
+  const previewStep = document.getElementById('page-import-step-preview');
+  const resultStep = document.getElementById('page-import-step-result');
+  const resetBtn = document.getElementById('page-btn-reset-import');
+
+  if (uploadStep) uploadStep.style.display = 'block';
+  if (dropZone) dropZone.style.display = 'flex';
+  if (loading) loading.style.display = 'none';
+  if (previewStep) previewStep.style.display = 'none';
+  if (resultStep) resultStep.style.display = 'none';
+  if (resetBtn) resetBtn.style.display = 'none';
+}
+
+// ─────────────────────────────────────────────
+//  IMPORTAÇÃO DE PLANILHAS (MODAL AUXILIAR)
 // ─────────────────────────────────────────────
 function openModalImport(autoPick = true) {
   state.importFile = null;
